@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trình đọc văn bản cuộn tự động kiểu AOD (Có Thông Báo)</title>
   <style>
+    /* CSS giữ nguyên như cũ */
     body { 
       font-family: sans-serif; 
       margin: 0; 
@@ -18,23 +19,14 @@
       min-height: 120vh;
       overflow-x: hidden;
     }
-    
-    /* Đồng hồ */
     #clock { font-size: 4em; margin-top: 20px; font-weight: bold; text-align: center; }
     #date { font-size: 1.2em; text-align: center; margin-bottom: 10px; }
-
-    /* Controls */
     #controls { margin: 10px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; transition: 0.3s; }
     button, input[type="range"], input[type="number"], .setting-group { padding: 6px 12px; font-size: 1em; cursor: pointer; border-radius: 8px; border: none;}
-    
-    /* Thêm style cho nút thông báo */
     #pushNotificationBtn { background: linear-gradient(135deg, #1565c0, #6a1b9a); color: white; font-weight: bold; }
     #pushNotificationBtn.active { background: linear-gradient(135deg, #2e7d32, #43a047); }
     .setting-group { background: #333; color: white; display: flex; align-items: center; gap: 5px; }
     input[type="number"] { background: #444; color: white; border: 1px solid #555; width: 50px; text-align: center;}
-
-
-    /* Khung văn bản */
     #displayArea {
       max-height: 60vh;
       width: 90%;
@@ -48,8 +40,6 @@
       transition: height 0.3s, max-height 0.3s;
     }
     #scrollSlider { width: 90%; margin: 10px 0; accent-color: #0af; }
-
-    /* Bong bóng */
     #bubble {
       position: fixed;
       bottom: 20px;
@@ -65,22 +55,17 @@
       z-index: 1000;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
     }
-
-    /* Thông tin đoạn */
     #paragraphInfo {
       margin: 10px 0;
       font-size: 1em;
       color: #ccc;
     }
-
-    /* Phần padding thêm để kéo xuống */
     .scroll-padding {
       height: 100px;
       width: 100%;
       opacity: 0;
       pointer-events: none;
     }
-    
     .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(30,30,30,0.95); padding: 12px 24px; border-radius: 30px; opacity: 0; transition: 0.3s; pointer-events: none; border: 1px solid #555; z-index: 10000; font-weight: bold; color: white;}
     .toast.show { opacity: 1; }
   </style>
@@ -140,6 +125,7 @@
     const paragraphInfo = document.getElementById("paragraphInfo");
     const notifBtn = document.getElementById('pushNotificationBtn');
     const toastEl = document.getElementById('toast');
+    const maxCharsDisplayInput = document.getElementById("maxCharsPerDisplay");
 
 
     const SESSION_ID = 'text_reader_' + Date.now();
@@ -182,6 +168,49 @@
         // Trường hợp không có dấu cách trong phạm vi maxChars, cắt cứng.
         return addEllipsis ? truncated + '...' : truncated; 
     }
+    
+    /**
+     * Logic MỚI: Tự động chia đoạn dài thành các đoạn con (sub-paragraphs).
+     * Điều này đảm bảo toàn bộ văn bản được đọc hết ngay cả khi maxCharsPerDisplay nhỏ.
+     * @param {string[]} rawParagraphs - Mảng các đoạn được tách từ file.
+     * @returns {string[]} - Mảng mới đã được chia nhỏ.
+     */
+    function preprocessParagraphs(rawParagraphs) {
+        const maxChars = parseInt(maxCharsDisplayInput.value) || 500;
+        const processed = [];
+
+        rawParagraphs.forEach(p => {
+            let currentText = p.trim();
+            if (currentText.length === 0) return;
+
+            // Nếu đoạn quá ngắn, chỉ thêm nó vào.
+            if (currentText.length <= maxChars) {
+                processed.push(currentText + '.');
+                return;
+            }
+
+            // Chia nhỏ đoạn dài
+            while (currentText.length > 0) {
+                // Sử dụng smartTruncate để lấy phần đầu tiên (luôn là từ hoàn chỉnh)
+                const segment = smartTruncate(currentText, maxChars, false); 
+                
+                // Nếu segment rỗng nhưng currentText vẫn còn (trường hợp từ quá dài), lấy maxChars
+                if (segment.length === 0 && currentText.length > 0) {
+                    const hardCut = currentText.substring(0, maxChars);
+                    processed.push(hardCut);
+                    currentText = currentText.substring(maxChars).trim();
+                } else if (segment.length > 0) {
+                    processed.push(segment + '.'); // Thêm lại dấu chấm (hoặc dấu câu ban đầu, nhưng đơn giản hóa bằng dấu chấm)
+                    
+                    // Cắt bỏ phần đã thêm vào
+                    currentText = currentText.substring(segment.length).trim();
+                } else {
+                    break; // Dừng nếu không thể cắt được gì nữa
+                }
+            }
+        });
+        return processed;
+    }
 
 
     // --- LƯU VÀ KHÔI PHỤC TRẠNG THÁI ---
@@ -190,7 +219,7 @@
       const progress = {
         sessionId: SESSION_ID,
         fileName: currentFileName,
-        content: fullTextContent || displayArea.textContent, 
+        content: fullTextContent, 
         paragraphMode: paragraphMode,
         currentParagraphIndex: currentParagraphIndex,
         scrollPosition: displayArea.scrollTop,
@@ -200,7 +229,7 @@
         speed: document.getElementById("speedRange").value,
         paragraphTime: document.getElementById("paragraphTime").value, 
         maxCharsPerNotif: document.getElementById("maxCharsPerNotif").value, 
-        maxCharsPerDisplay: document.getElementById("maxCharsPerDisplay").value, // LƯU GIỚI HẠN MỚI
+        maxCharsPerDisplay: maxCharsDisplayInput.value,
         isPushEnabled: pushEnabled, 
         timestamp: Date.now()
       };
@@ -218,8 +247,9 @@
       if (progress.content && progress.content !== DEFAULT_TEXT) {
         fullTextContent = progress.content; 
         currentFileName = progress.fileName || '';
-        // Tách đoạn bằng .!? (chỉ filter đoạn không rỗng)
-        paragraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
+        // Tái tạo paragraphs từ fullTextContent và cài đặt maxCharsPerDisplay hiện tại
+        const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
+        paragraphs = preprocessParagraphs(rawParagraphs); 
       } else {
         fullTextContent = '';
         paragraphs = [];
@@ -230,9 +260,12 @@
         document.getElementById("modeBtn").textContent = paragraphMode ? "📜 Chế độ cuộn liên tục" : "📖 Chế độ từng đoạn";
         document.getElementById("paragraphTimeLabel").style.display = paragraphMode ? "flex" : "none";
         
+        // Khôi phục cài đặt trước khi gọi showCurrentParagraph
+        if (progress.maxCharsPerDisplay) maxCharsDisplayInput.value = progress.maxCharsPerDisplay; 
+
         if (paragraphMode && paragraphs.length > 0 && progress.currentParagraphIndex !== undefined) {
           currentParagraphIndex = progress.currentParagraphIndex;
-          showCurrentParagraph(false); // Gọi showCurrentParagraph để áp dụng maxCharsPerDisplay
+          showCurrentParagraph(false);
         } else if (!paragraphMode) {
             displayArea.textContent = fullTextContent;
             if (progress.scrollPosition !== undefined) {
@@ -244,24 +277,19 @@
         }
       }
 
-      // Khôi phục cài đặt
+      // Khôi phục cài đặt khác
       if (progress.clockSize) document.getElementById("clockSize").value = progress.clockSize;
       if (progress.areaHeight) document.getElementById("areaHeight").value = progress.areaHeight;
       if (progress.speed) document.getElementById("speedRange").value = progress.speed;
-      
-      // KHÔI PHỤC INPUT NUMBER
       if (progress.paragraphTime) document.getElementById("paragraphTime").value = progress.paragraphTime;
       if (progress.maxCharsPerNotif) document.getElementById("maxCharsPerNotif").value = progress.maxCharsPerNotif; 
-      if (progress.maxCharsPerDisplay) document.getElementById("maxCharsPerDisplay").value = progress.maxCharsPerDisplay; // KHÔI PHỤC GIỚI HẠN MỚI
 
-      // Khôi phục trạng thái thông báo
       if (progress.isPushEnabled) {
           pushEnabled = true;
           notifBtn.innerHTML = "🔔 Đã bật"; 
           notifBtn.classList.add('active');
       }
 
-      // Áp dụng cài đặt
       document.getElementById("clock").style.fontSize = document.getElementById("clockSize").value + "em";
       displayArea.style.maxHeight = document.getElementById("areaHeight").value + "vh";
 
@@ -269,14 +297,6 @@
       updateSliderForParagraphs();
     }
 
-    function clearProgress() {
-      if (confirm('Bạn có chắc muốn xóa tiến trình đã lưu?')) {
-        localStorage.removeItem('textReaderProgress');
-        location.reload(); 
-      }
-    }
-
-    setInterval(saveProgress, 5000);
 
     // Load file TXT
     document.getElementById("fileInput").addEventListener("change", function(e) {
@@ -286,18 +306,21 @@
       currentFileName = file.name;
       const reader = new FileReader();
       reader.onload = function(ev) {
-        const content = ev.target.result;
-        fullTextContent = content; 
-        displayArea.textContent = content;
-        // Tách đoạn bằng .!? (chỉ filter đoạn không rỗng)
-        paragraphs = content.split(/[.!?]+/).filter(p => p.trim().length > 0);
+        fullTextContent = ev.target.result;
+        
+        // 1. Tách thô
+        const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
+        // 2. Tiền xử lý: Chia đoạn quá dài thành đoạn con
+        paragraphs = preprocessParagraphs(rawParagraphs); 
+        
         currentParagraphIndex = 0;
         
-        // Áp dụng giới hạn nếu đang ở chế độ đoạn
         if (paragraphMode) {
             showCurrentParagraph(false);
+        } else {
+            displayArea.textContent = fullTextContent;
         }
-        
+
         updateParagraphInfo();
         updateSliderForParagraphs();
         saveProgress(); 
@@ -322,14 +345,18 @@
             slider.min = 0;
             slider.max = paragraphs.length - 1;
             slider.value = currentParagraphIndex;
+            slider.style.display = 'block';
         } else if (!paragraphMode && fullTextContent) {
             slider.min = 0;
             slider.max = 100;
+            slider.style.display = 'block';
+        } else {
+            slider.style.display = 'none';
         }
     }
 
-
     function toggleMode() {
+      //... (Giữ nguyên logic chuyển chế độ)
       if (fullTextContent.length === 0) {
         showToast('Vui lòng chọn file TXT trước khi chuyển chế độ.');
         return;
@@ -342,13 +369,19 @@
       if (paragraphMode) {
         modeBtn.textContent = "📜 Chế độ cuộn liên tục";
         paragraphTimeLabel.style.display = "flex";
+        
+        // Tái tạo paragraphs dựa trên cài đặt maxCharsPerDisplay hiện tại
+        const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
+        paragraphs = preprocessParagraphs(rawParagraphs); 
+        currentParagraphIndex = 0;
+
         if (paragraphs.length > 0) {
-          showCurrentParagraph(); // Hiển thị đoạn đầu tiên (đã cắt)
+          showCurrentParagraph();
         }
       } else {
         modeBtn.textContent = "📖 Chế độ từng đoạn";
         paragraphTimeLabel.style.display = "none";
-        displayArea.textContent = fullTextContent; // Hiển thị toàn bộ văn bản
+        displayArea.textContent = fullTextContent; 
         displayArea.scrollTop = 0; 
       }
       updateParagraphInfo();
@@ -356,25 +389,19 @@
       saveProgress(); 
     }
 
-    // HÀM QUAN TRỌNG ĐÃ ĐƯỢC CHỈNH SỬA
+    // Hàm showCurrentParagraph đã được ĐƠN GIẢN HÓA
+    // vì việc cắt chữ thông minh đã được xử lý trong preprocessParagraphs
     function showCurrentParagraph(shouldSave = true) {
       if (paragraphs.length > 0 && currentParagraphIndex < paragraphs.length) {
-        // Lấy đoạn gốc (có thêm dấu chấm)
-        const fullParagraph = paragraphs[currentParagraphIndex].trim() + '.';
-        
-        // ĐỌC GIÁ TRỊ GIỚI HẠN HIỂN THỊ TRÊN WEB (MỚI)
-        const maxDisplayChars = parseInt(document.getElementById("maxCharsPerDisplay").value) || 500;
-
-        // CẮT ĐOẠN VĂN BẢN ĐỂ HIỂN THỊ TRÊN WEB (KHÔNG THÊM ...)
-        const displayContent = smartTruncate(fullParagraph, maxDisplayChars, false);
-        
-        displayArea.textContent = displayContent; // Hiển thị nội dung đã được cắt
+        // Nội dung hiển thị chính là đoạn đã được chia nhỏ
+        const displayContent = paragraphs[currentParagraphIndex]; 
+        displayArea.textContent = displayContent;
 
         // Gửi thông báo (chỉ ở chế độ đoạn)
         if (pushEnabled) {
             const maxCharsNotif = parseInt(document.getElementById("maxCharsPerNotif").value) || 100;
             // Cắt đoạn để gửi thông báo (CÓ THÊM ...)
-            const notificationBody = smartTruncate(fullParagraph, maxCharsNotif, true); 
+            const notificationBody = smartTruncate(displayContent, maxCharsNotif, true); 
             const title = `Đọc: Đoạn ${currentParagraphIndex + 1}/${paragraphs.length}`;
             sendNotification(title, notificationBody);
         }
@@ -401,6 +428,7 @@
 
 
     function toggleScroll() {
+      //... (Giữ nguyên logic toggleScroll)
       if (fullTextContent.length === 0) {
         showToast('Vui lòng chọn file TXT trước khi bắt đầu cuộn/đọc tự động.');
         return;
@@ -422,7 +450,6 @@
         }
 
         if (paragraphMode) {
-          // Lấy giá trị từ input type="number"
           const paragraphTime = parseFloat(document.getElementById("paragraphTime").value) * 1000; 
           interval = setInterval(() => {
             nextParagraph();
@@ -434,7 +461,6 @@
                 return;
             }
             displayArea.scrollTop += parseInt(document.getElementById("speedRange").value);
-            // Cập nhật slider khi cuộn
             slider.value = (displayArea.scrollTop / (displayArea.scrollHeight - displayArea.clientHeight)) * 100;
             saveProgress(); 
           }, 100);
@@ -445,7 +471,8 @@
         saveProgress(); 
       }
     }
-
+    
+    //... (Các hàm khác giữ nguyên)
     function restoreControls() {
       clearInterval(interval);
       scrolling = false;
@@ -458,11 +485,8 @@
       saveProgress(); 
     }
     
-    // --- LOGIC THÔNG BÁO PUSH ---
-
     function sendNotification(title, body) {
       if (!pushEnabled) return;
-      // Dùng emoji làm icon
       const icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E";
       
       navigator.serviceWorker.ready.then(reg => {
@@ -483,7 +507,6 @@
       if (permission !== 'granted') return showToast('❌ Cần cấp quyền thông báo');
 
       try {
-        // Đảm bảo bạn có file sw.js trong cùng thư mục
         await navigator.serviceWorker.register('sw.js'); 
         pushEnabled = true;
         notifBtn.innerHTML = "🔔 Đã bật (Sẵn sàng)"; 
@@ -496,23 +519,29 @@
       }
     });
 
-    // --- CÁC HÀM CŨ CỦA BẠN (Cập nhật) ---
-    
-    // Slider (Thanh trượt)
     slider.addEventListener("input", () => {
       if (paragraphMode && paragraphs.length > 1) {
-        // Chế độ đoạn: Slider chuyển đoạn
-        const paragraphIndex = parseInt(slider.value); // Giá trị slider là index
+        const paragraphIndex = parseInt(slider.value);
         currentParagraphIndex = paragraphIndex;
         showCurrentParagraph();
-      } else if (fullTextContent.length > 0) {
-        // Chế độ cuộn: Slider chuyển vị trí cuộn
+      } else if (fullTextContent.length > 0 && !paragraphMode) {
         displayArea.scrollTop = (slider.value / 100) * (displayArea.scrollHeight - displayArea.clientHeight);
         saveProgress(); 
       }
     });
 
-    // Cài đặt chung
+    // Lắng nghe sự kiện input cho cài đặt giới hạn hiển thị
+    maxCharsDisplayInput.addEventListener("input", function() {
+        saveProgress();
+        // Cần tải lại paragraphs khi cài đặt này thay đổi ở chế độ đoạn
+        if (paragraphMode && fullTextContent) {
+            const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
+            paragraphs = preprocessParagraphs(rawParagraphs); 
+            currentParagraphIndex = 0;
+            showCurrentParagraph();
+        }
+    });
+
     document.getElementById("clockSize").addEventListener("input", function() {
       document.getElementById("clock").style.fontSize = this.value + "em";
       saveProgress();
@@ -523,13 +552,10 @@
       saveProgress();
     });
 
-    // Cài đặt số
     document.getElementById("speedRange").addEventListener("input", saveProgress);
     document.getElementById("paragraphTime").addEventListener("input", saveProgress); 
     document.getElementById("maxCharsPerNotif").addEventListener("input", saveProgress);
-    document.getElementById("maxCharsPerDisplay").addEventListener("input", saveProgress); // Lắng nghe sự kiện input mới
 
-    // Đồng hồ
     function updateClock() {
       const now = new Date();
       let h = String(now.getHours()).padStart(2,"0");
@@ -541,7 +567,6 @@
     setInterval(updateClock, 1000);
     updateClock();
 
-    // Logic di chuyển bong bóng (Drag)
     bubble.addEventListener("mousedown", function(e) {
       let shiftX = e.clientX - bubble.getBoundingClientRect().left;
       let shiftY = e.clientY - bubble.getBoundingClientRect().top;
@@ -558,7 +583,6 @@
     });
     bubble.ondragstart = () => false;
 
-    // Phím tắt
     document.addEventListener('keydown', function(e) {
       if (fullTextContent.length > 0 && !scrolling) {
           if (paragraphMode) {
