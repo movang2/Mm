@@ -106,7 +106,12 @@
     
     <label id="paragraphTimeLabel" style="display: none;" class="setting-group">⏱️ Tg/đoạn (s): <input type="number" min="1" max="60" value="3" id="paragraphTime"></label>
     
-    <div class="setting-group">📝 Max Chữ thông báo: <input type="number" id="maxCharsPerNotif" value="100"></div> 
+    <div class="setting-group">
+        <label for="maxCharsPerDisplay">🔠 Max Chữ Hiển Thị:</label> 
+        <input type="number" min="50" max="5000" value="500" id="maxCharsPerDisplay">
+    </div>
+    
+    <div class="setting-group">📝 Max Chữ thông báo: <input type="number" min="10" max="500" id="maxCharsPerNotif" value="100"></div> 
   </div>
 
   <div id="paragraphInfo"></div>
@@ -156,7 +161,14 @@
         setTimeout(()=>toastEl.classList.remove('show'),3000); 
     }
 
-    function smartTruncate(text, maxChars) {
+    /**
+     * Cắt văn bản thông minh tại dấu cách gần nhất.
+     * @param {string} text - Văn bản gốc.
+     * @param {number} maxChars - Giới hạn ký tự tối đa.
+     * @param {boolean} addEllipsis - Có thêm '...' vào cuối không.
+     * @returns {string} - Văn bản đã được cắt.
+     */
+    function smartTruncate(text, maxChars, addEllipsis = false) {
         if (text.length <= maxChars) {
             return text;
         }
@@ -164,9 +176,11 @@
         const lastSpace = truncated.lastIndexOf(' ');
         
         if (lastSpace !== -1) {
-            return truncated.substring(0, lastSpace) + '...';
+            const result = truncated.substring(0, lastSpace);
+            return addEllipsis ? result + '...' : result;
         }
-        return truncated + '...';
+        // Trường hợp không có dấu cách trong phạm vi maxChars, cắt cứng.
+        return addEllipsis ? truncated + '...' : truncated; 
     }
 
 
@@ -186,6 +200,7 @@
         speed: document.getElementById("speedRange").value,
         paragraphTime: document.getElementById("paragraphTime").value, 
         maxCharsPerNotif: document.getElementById("maxCharsPerNotif").value, 
+        maxCharsPerDisplay: document.getElementById("maxCharsPerDisplay").value, // LƯU GIỚI HẠN MỚI
         isPushEnabled: pushEnabled, 
         timestamp: Date.now()
       };
@@ -203,6 +218,7 @@
       if (progress.content && progress.content !== DEFAULT_TEXT) {
         fullTextContent = progress.content; 
         currentFileName = progress.fileName || '';
+        // Tách đoạn bằng .!? (chỉ filter đoạn không rỗng)
         paragraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
       } else {
         fullTextContent = '';
@@ -216,7 +232,7 @@
         
         if (paragraphMode && paragraphs.length > 0 && progress.currentParagraphIndex !== undefined) {
           currentParagraphIndex = progress.currentParagraphIndex;
-          showCurrentParagraph(false); 
+          showCurrentParagraph(false); // Gọi showCurrentParagraph để áp dụng maxCharsPerDisplay
         } else if (!paragraphMode) {
             displayArea.textContent = fullTextContent;
             if (progress.scrollPosition !== undefined) {
@@ -236,6 +252,7 @@
       // KHÔI PHỤC INPUT NUMBER
       if (progress.paragraphTime) document.getElementById("paragraphTime").value = progress.paragraphTime;
       if (progress.maxCharsPerNotif) document.getElementById("maxCharsPerNotif").value = progress.maxCharsPerNotif; 
+      if (progress.maxCharsPerDisplay) document.getElementById("maxCharsPerDisplay").value = progress.maxCharsPerDisplay; // KHÔI PHỤC GIỚI HẠN MỚI
 
       // Khôi phục trạng thái thông báo
       if (progress.isPushEnabled) {
@@ -275,6 +292,12 @@
         // Tách đoạn bằng .!? (chỉ filter đoạn không rỗng)
         paragraphs = content.split(/[.!?]+/).filter(p => p.trim().length > 0);
         currentParagraphIndex = 0;
+        
+        // Áp dụng giới hạn nếu đang ở chế độ đoạn
+        if (paragraphMode) {
+            showCurrentParagraph(false);
+        }
+        
         updateParagraphInfo();
         updateSliderForParagraphs();
         saveProgress(); 
@@ -284,6 +307,27 @@
     });
 
     // --- LOGIC CHUYỂN ĐOẠN/CUỘN ---
+    
+    function updateParagraphInfo() {
+        if (paragraphMode && paragraphs.length > 0) {
+            paragraphInfo.style.display = 'block';
+            paragraphInfo.textContent = `Đoạn ${currentParagraphIndex + 1} / ${paragraphs.length}`;
+        } else {
+            paragraphInfo.style.display = 'none';
+        }
+    }
+
+    function updateSliderForParagraphs() {
+        if (paragraphMode && paragraphs.length > 1) {
+            slider.min = 0;
+            slider.max = paragraphs.length - 1;
+            slider.value = currentParagraphIndex;
+        } else if (!paragraphMode && fullTextContent) {
+            slider.min = 0;
+            slider.max = 100;
+        }
+    }
+
 
     function toggleMode() {
       if (fullTextContent.length === 0) {
@@ -299,12 +343,12 @@
         modeBtn.textContent = "📜 Chế độ cuộn liên tục";
         paragraphTimeLabel.style.display = "flex";
         if (paragraphs.length > 0) {
-          showCurrentParagraph();
+          showCurrentParagraph(); // Hiển thị đoạn đầu tiên (đã cắt)
         }
       } else {
         modeBtn.textContent = "📖 Chế độ từng đoạn";
         paragraphTimeLabel.style.display = "none";
-        displayArea.textContent = fullTextContent; 
+        displayArea.textContent = fullTextContent; // Hiển thị toàn bộ văn bản
         displayArea.scrollTop = 0; 
       }
       updateParagraphInfo();
@@ -312,15 +356,25 @@
       saveProgress(); 
     }
 
+    // HÀM QUAN TRỌNG ĐÃ ĐƯỢC CHỈNH SỬA
     function showCurrentParagraph(shouldSave = true) {
       if (paragraphs.length > 0 && currentParagraphIndex < paragraphs.length) {
+        // Lấy đoạn gốc (có thêm dấu chấm)
         const fullParagraph = paragraphs[currentParagraphIndex].trim() + '.';
-        displayArea.textContent = fullParagraph;
+        
+        // ĐỌC GIÁ TRỊ GIỚI HẠN HIỂN THỊ TRÊN WEB (MỚI)
+        const maxDisplayChars = parseInt(document.getElementById("maxCharsPerDisplay").value) || 500;
+
+        // CẮT ĐOẠN VĂN BẢN ĐỂ HIỂN THỊ TRÊN WEB (KHÔNG THÊM ...)
+        const displayContent = smartTruncate(fullParagraph, maxDisplayChars, false);
+        
+        displayArea.textContent = displayContent; // Hiển thị nội dung đã được cắt
 
         // Gửi thông báo (chỉ ở chế độ đoạn)
         if (pushEnabled) {
-            const maxChars = parseInt(document.getElementById("maxCharsPerNotif").value) || 100;
-            const notificationBody = smartTruncate(fullParagraph, maxChars);
+            const maxCharsNotif = parseInt(document.getElementById("maxCharsPerNotif").value) || 100;
+            // Cắt đoạn để gửi thông báo (CÓ THÊM ...)
+            const notificationBody = smartTruncate(fullParagraph, maxCharsNotif, true); 
             const title = `Đọc: Đoạn ${currentParagraphIndex + 1}/${paragraphs.length}`;
             sendNotification(title, notificationBody);
         }
@@ -337,6 +391,14 @@
         showCurrentParagraph();
       }
     }
+    
+    function previousParagraph() {
+      if (currentParagraphIndex > 0) {
+        currentParagraphIndex--;
+        showCurrentParagraph();
+      }
+    }
+
 
     function toggleScroll() {
       if (fullTextContent.length === 0) {
@@ -372,6 +434,7 @@
                 return;
             }
             displayArea.scrollTop += parseInt(document.getElementById("speedRange").value);
+            // Cập nhật slider khi cuộn
             slider.value = (displayArea.scrollTop / (displayArea.scrollHeight - displayArea.clientHeight)) * 100;
             saveProgress(); 
           }, 100);
@@ -399,6 +462,7 @@
 
     function sendNotification(title, body) {
       if (!pushEnabled) return;
+      // Dùng emoji làm icon
       const icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E";
       
       navigator.serviceWorker.ready.then(reg => {
@@ -419,7 +483,8 @@
       if (permission !== 'granted') return showToast('❌ Cần cấp quyền thông báo');
 
       try {
-        await navigator.serviceWorker.register('sw.js');
+        // Đảm bảo bạn có file sw.js trong cùng thư mục
+        await navigator.serviceWorker.register('sw.js'); 
         pushEnabled = true;
         notifBtn.innerHTML = "🔔 Đã bật (Sẵn sàng)"; 
         notifBtn.classList.add('active');
@@ -427,22 +492,27 @@
         sendNotification("🔔 Sẵn sàng", "Thông báo sẽ hiện khi chuyển đoạn!");
         saveProgress();
       } catch (err) {
-        showToast("Lỗi đăng ký Service Worker: Hãy kiểm tra file sw.js!");
+        showToast("Lỗi đăng ký Service Worker. Hãy kiểm tra file sw.js!");
       }
     });
 
-    // --- CÁC HÀM CŨ CỦA BẠN ---
+    // --- CÁC HÀM CŨ CỦA BẠN (Cập nhật) ---
+    
+    // Slider (Thanh trượt)
     slider.addEventListener("input", () => {
       if (paragraphMode && paragraphs.length > 1) {
-        const paragraphIndex = Math.round((slider.value / 100) * (paragraphs.length - 1));
+        // Chế độ đoạn: Slider chuyển đoạn
+        const paragraphIndex = parseInt(slider.value); // Giá trị slider là index
         currentParagraphIndex = paragraphIndex;
         showCurrentParagraph();
-      } else {
+      } else if (fullTextContent.length > 0) {
+        // Chế độ cuộn: Slider chuyển vị trí cuộn
         displayArea.scrollTop = (slider.value / 100) * (displayArea.scrollHeight - displayArea.clientHeight);
         saveProgress(); 
       }
     });
 
+    // Cài đặt chung
     document.getElementById("clockSize").addEventListener("input", function() {
       document.getElementById("clock").style.fontSize = this.value + "em";
       saveProgress();
@@ -453,10 +523,11 @@
       saveProgress();
     });
 
+    // Cài đặt số
     document.getElementById("speedRange").addEventListener("input", saveProgress);
-    // Listener cho input type="number"
     document.getElementById("paragraphTime").addEventListener("input", saveProgress); 
     document.getElementById("maxCharsPerNotif").addEventListener("input", saveProgress);
+    document.getElementById("maxCharsPerDisplay").addEventListener("input", saveProgress); // Lắng nghe sự kiện input mới
 
     // Đồng hồ
     function updateClock() {
@@ -470,6 +541,7 @@
     setInterval(updateClock, 1000);
     updateClock();
 
+    // Logic di chuyển bong bóng (Drag)
     bubble.addEventListener("mousedown", function(e) {
       let shiftX = e.clientX - bubble.getBoundingClientRect().left;
       let shiftY = e.clientY - bubble.getBoundingClientRect().top;
@@ -491,8 +563,10 @@
       if (fullTextContent.length > 0 && !scrolling) {
           if (paragraphMode) {
               if (e.key === 'ArrowRight') {
+                e.preventDefault();
                 nextParagraph();
               } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
                 previousParagraph();
               }
           } else if (e.key === ' ') { 
