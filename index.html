@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Trình đọc văn bản cuộn tự động kiểu AOD (Có Thông Báo)</title>
+  <title>Trình đọc file SRT/TXT (Có Thông Báo)</title>
   <style>
     /* CSS giữ nguyên như cũ */
     body { 
@@ -39,6 +39,42 @@
       white-space: pre-wrap;
       transition: height 0.3s, max-height 0.3s;
     }
+
+    /* === NEW STYLES FOR SRT MODE === */
+    #displayArea.srt-mode {
+        display: flex;
+        flex-direction: column;
+        justify-content: center; /* Center the segment vertically */
+        align-items: flex-start;
+        text-align: left;
+        overflow-y: hidden; /* Prevent scrolling in SRT segment mode */
+    }
+    .srt-segment { 
+        margin-bottom: 25px; 
+        border-left: 5px solid #0af; 
+        padding-left: 15px;
+    }
+    .srt-time { 
+        font-size: 0.9em; 
+        color: #888; 
+        margin-bottom: 5px;
+        display: block;
+        font-family: monospace;
+    }
+    .srt-korean { 
+        font-weight: bold; 
+        color: #f7f7f7; 
+        font-size: 1.4em;
+        line-height: 1.4;
+        margin-bottom: 5px;
+    }
+    .srt-vietnamese { 
+        color: #b0e0ff; 
+        font-style: italic; 
+        font-size: 1.1em;
+    }
+    /* =============================== */
+
     #scrollSlider { width: 90%; margin: 10px 0; accent-color: #0af; }
     #bubble {
       position: fixed;
@@ -76,8 +112,8 @@
   <div id="clock">00:00</div>
   <div id="date">-- -- ----</div>
 
-  <h2>📄 Trình đọc văn bản cuộn tự động</h2>
-  <input type="file" id="fileInput" accept=".txt">
+  <h2>📄 Trình đọc file SRT/TXT</h2>
+  <input type="file" id="fileInput" accept=".txt,.srt">
 
   <div id="controls">
     <button onclick="toggleScroll()">▶️ Bắt đầu / ⏸️ Dừng</button>
@@ -87,12 +123,13 @@
     
     <div class="setting-group">⌚ Cỡ ĐH: <input type="range" min="2" max="8" value="4" step="0.1" id="clockSize"></div>
     <div class="setting-group">📏 Cao khung: <input type="range" min="30" max="90" value="60" id="areaHeight"></div>
-    <div class="setting-group">🚀 Tốc độ: <input type="range" min="1" max="10" value="3" id="speedRange"></div>
+    
+    <div class="setting-group" id="speedGroup">🚀 Tốc độ (TXT): <input type="range" min="1" max="10" value="3" id="speedRange"></div>
     
     <label id="paragraphTimeLabel" style="display: none;" class="setting-group">⏱️ Tg/đoạn (s): <input type="number" min="1" max="60" value="3" id="paragraphTime"></label>
     
-    <div class="setting-group">
-        <label for="maxCharsPerDisplay">🔠 Max Chữ Hiển Thị:</label> 
+    <div class="setting-group" id="maxCharsDisplayGroup" style="display: none;">
+        <label for="maxCharsPerDisplay">🔠 Max Chữ Hiển Thị (TXT):</label> 
         <input type="number" min="50" max="5000" value="500" id="maxCharsPerDisplay">
     </div>
     
@@ -103,7 +140,7 @@
 
   <input type="range" min="0" max="100" value="0" id="scrollSlider">
 
-  <div id="displayArea">📂 Vui lòng chọn file TXT để hiển thị nội dung...</div>
+  <div id="displayArea">📂 Vui lòng chọn file TXT hoặc SRT để hiển thị nội dung...</div>
 
   <div id="bubble" onclick="restoreControls()">⏸️</div>
   <div id="toast" class="toast"></div>
@@ -112,11 +149,12 @@
     let scrolling = false;
     let interval;
     let paragraphMode = false;
-    let paragraphs = [];
+    let segments = []; // Đổi tên từ 'paragraphs' thành 'segments'
     let currentParagraphIndex = 0;
     let currentFileName = '';
     let fullTextContent = ''; 
     let pushEnabled = false; 
+    let isSrtFile = false; // Biến mới để kiểm tra loại file
     
     const displayArea = document.getElementById("displayArea");
     const slider = document.getElementById("scrollSlider");
@@ -126,10 +164,11 @@
     const notifBtn = document.getElementById('pushNotificationBtn');
     const toastEl = document.getElementById('toast');
     const maxCharsDisplayInput = document.getElementById("maxCharsPerDisplay");
+    const maxCharsDisplayGroup = document.getElementById("maxCharsDisplayGroup");
 
 
     const SESSION_ID = 'text_reader_' + Date.now();
-    const DEFAULT_TEXT = '📂 Vui lòng chọn file TXT để hiển thị nội dung...';
+    const DEFAULT_TEXT = '📂 Vui lòng chọn file TXT hoặc SRT để hiển thị nội dung...';
 
 
     window.addEventListener('load', function() {
@@ -149,10 +188,6 @@
 
     /**
      * Cắt văn bản thông minh tại dấu cách gần nhất.
-     * @param {string} text - Văn bản gốc.
-     * @param {number} maxChars - Giới hạn ký tự tối đa.
-     * @param {boolean} addEllipsis - Có thêm '...' vào cuối không.
-     * @returns {string} - Văn bản đã được cắt.
      */
     function smartTruncate(text, maxChars, addEllipsis = false) {
         if (text.length <= maxChars) {
@@ -165,17 +200,67 @@
             const result = truncated.substring(0, lastSpace);
             return addEllipsis ? result + '...' : result;
         }
-        // Trường hợp không có dấu cách trong phạm vi maxChars, cắt cứng.
         return addEllipsis ? truncated + '...' : truncated; 
     }
     
     /**
-     * Logic MỚI: Tự động chia đoạn dài thành các đoạn con (sub-paragraphs).
-     * Điều này đảm bảo toàn bộ văn bản được đọc hết ngay cả khi maxCharsPerDisplay nhỏ.
-     * @param {string[]} rawParagraphs - Mảng các đoạn được tách từ file.
-     * @returns {string[]} - Mảng mới đã được chia nhỏ.
+     * Hàm phân tích cú pháp file SRT (Chỉ dành cho SRT song ngữ 2 dòng)
+     * @param {string} srtContent - Nội dung file SRT
+     * @returns {Array<Object>} - Mảng các đối tượng segment đã phân tích
+     */
+    function parseSrt(srtContent) {
+        const lines = srtContent.split('\n');
+        const newSegments = [];
+        let currentSegment = {};
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+
+            if (!line) {
+                // Kết thúc segment
+                if (currentSegment.korean && currentSegment.vietnamese) {
+                    newSegments.push(currentSegment);
+                }
+                currentSegment = {};
+                continue;
+            }
+
+            // 1. Segment Index (Bỏ qua hoặc dùng để kiểm tra)
+            if (!isNaN(parseInt(line)) && !currentSegment.index) {
+                currentSegment.index = parseInt(line);
+                continue;
+            }
+
+            // 2. Timestamps
+            if (line.includes('-->') && !currentSegment.start) {
+                const parts = line.split('-->');
+                currentSegment.start = parts[0].trim();
+                currentSegment.end = parts[1].trim();
+                continue;
+            }
+
+            // 3. Korean/Vietnamese text (Giả sử dòng đầu là Hàn, dòng sau là Việt)
+            if (currentSegment.index && currentSegment.start) {
+                if (!currentSegment.korean) {
+                    currentSegment.korean = line;
+                } else if (!currentSegment.vietnamese) {
+                    currentSegment.vietnamese = line;
+                }
+            }
+        }
+        // Thêm segment cuối cùng nếu có
+        if (currentSegment.korean && currentSegment.vietnamese) {
+            newSegments.push(currentSegment);
+        }
+        return newSegments;
+    }
+
+    /**
+     * Logic MỚI: Tự động chia đoạn dài thành các đoạn con (chỉ dùng cho TXT).
      */
     function preprocessParagraphs(rawParagraphs) {
+        if (isSrtFile) return []; // Bỏ qua nếu là SRT
+        
         const maxChars = parseInt(maxCharsDisplayInput.value) || 500;
         const processed = [];
 
@@ -191,21 +276,17 @@
 
             // Chia nhỏ đoạn dài
             while (currentText.length > 0) {
-                // Sử dụng smartTruncate để lấy phần đầu tiên (luôn là từ hoàn chỉnh)
                 const segment = smartTruncate(currentText, maxChars, false); 
                 
-                // Nếu segment rỗng nhưng currentText vẫn còn (trường hợp từ quá dài), lấy maxChars
                 if (segment.length === 0 && currentText.length > 0) {
                     const hardCut = currentText.substring(0, maxChars);
                     processed.push(hardCut);
                     currentText = currentText.substring(maxChars).trim();
                 } else if (segment.length > 0) {
-                    processed.push(segment + '.'); // Thêm lại dấu chấm (hoặc dấu câu ban đầu, nhưng đơn giản hóa bằng dấu chấm)
-                    
-                    // Cắt bỏ phần đã thêm vào
+                    processed.push(segment + '.'); 
                     currentText = currentText.substring(segment.length).trim();
                 } else {
-                    break; // Dừng nếu không thể cắt được gì nữa
+                    break;
                 }
             }
         });
@@ -231,6 +312,7 @@
         maxCharsPerNotif: document.getElementById("maxCharsPerNotif").value, 
         maxCharsPerDisplay: maxCharsDisplayInput.value,
         isPushEnabled: pushEnabled, 
+        isSrtFile: isSrtFile, // Lưu trạng thái loại file
         timestamp: Date.now()
       };
       
@@ -244,15 +326,26 @@
       const progress = JSON.parse(saved);
       if (progress.sessionId && progress.sessionId !== SESSION_ID) return;
 
+      isSrtFile = progress.isSrtFile || false;
+      
+      // Ẩn/hiện các control chỉ dành cho TXT
+      maxCharsDisplayGroup.style.display = isSrtFile ? 'none' : 'flex';
+      document.getElementById("speedGroup").style.display = isSrtFile ? 'none' : 'flex';
+
       if (progress.content && progress.content !== DEFAULT_TEXT) {
         fullTextContent = progress.content; 
         currentFileName = progress.fileName || '';
-        // Tái tạo paragraphs từ fullTextContent và cài đặt maxCharsPerDisplay hiện tại
-        const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
-        paragraphs = preprocessParagraphs(rawParagraphs); 
+        
+        if (isSrtFile) {
+            segments = parseSrt(fullTextContent);
+        } else {
+            // Tái tạo segments (paragraphs) cho TXT
+            const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
+            segments = preprocessParagraphs(rawParagraphs); 
+        }
       } else {
         fullTextContent = '';
-        paragraphs = [];
+        segments = [];
       }
 
       if (progress.paragraphMode !== undefined) {
@@ -260,10 +353,13 @@
         document.getElementById("modeBtn").textContent = paragraphMode ? "📜 Chế độ cuộn liên tục" : "📖 Chế độ từng đoạn";
         document.getElementById("paragraphTimeLabel").style.display = paragraphMode ? "flex" : "none";
         
+        // Thêm class cho SRT mode để điều chỉnh displayArea
+        displayArea.classList.toggle('srt-mode', paragraphMode && isSrtFile);
+        
         // Khôi phục cài đặt trước khi gọi showCurrentParagraph
         if (progress.maxCharsPerDisplay) maxCharsDisplayInput.value = progress.maxCharsPerDisplay; 
 
-        if (paragraphMode && paragraphs.length > 0 && progress.currentParagraphIndex !== undefined) {
+        if (paragraphMode && segments.length > 0 && progress.currentParagraphIndex !== undefined) {
           currentParagraphIndex = progress.currentParagraphIndex;
           showCurrentParagraph(false);
         } else if (!paragraphMode) {
@@ -298,21 +394,39 @@
     }
 
 
-    // Load file TXT
+    // Load file TXT/SRT
     document.getElementById("fileInput").addEventListener("change", function(e) {
       const file = e.target.files[0];
       if (!file) return;
       
       currentFileName = file.name;
+      isSrtFile = file.name.toLowerCase().endsWith('.srt');
+      
+      // Ẩn/hiện các control chỉ dành cho TXT
+      maxCharsDisplayGroup.style.display = isSrtFile ? 'none' : 'flex';
+      document.getElementById("speedGroup").style.display = isSrtFile ? 'none' : 'flex';
+      
       const reader = new FileReader();
       reader.onload = function(ev) {
         fullTextContent = ev.target.result;
         
-        // 1. Tách thô
-        const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
-        // 2. Tiền xử lý: Chia đoạn quá dài thành đoạn con
-        paragraphs = preprocessParagraphs(rawParagraphs); 
-        
+        if (isSrtFile) {
+            // SRT mode: segments là các block phụ đề
+            segments = parseSrt(fullTextContent);
+            paragraphMode = true; // Bật cố định chế độ từng đoạn cho SRT
+            document.getElementById("modeBtn").textContent = "📜 Chế độ cuộn liên tục";
+            document.getElementById("paragraphTimeLabel").style.display = "flex";
+            displayArea.classList.add('srt-mode');
+            showToast(`Đã tải file SRT "${file.name}". Bật chế độ Từng Đoạn.`);
+
+        } else {
+            // TXT mode: dùng lại logic chia đoạn cũ
+            const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
+            segments = preprocessParagraphs(rawParagraphs); 
+            displayArea.classList.remove('srt-mode');
+            showToast(`Đã tải file TXT "${file.name}"`);
+        }
+
         currentParagraphIndex = 0;
         
         if (paragraphMode) {
@@ -324,7 +438,6 @@
         updateParagraphInfo();
         updateSliderForParagraphs();
         saveProgress(); 
-        showToast(`Đã tải file "${file.name}"`);
       };
       reader.readAsText(file);
     });
@@ -332,18 +445,18 @@
     // --- LOGIC CHUYỂN ĐOẠN/CUỘN ---
     
     function updateParagraphInfo() {
-        if (paragraphMode && paragraphs.length > 0) {
+        if (paragraphMode && segments.length > 0) {
             paragraphInfo.style.display = 'block';
-            paragraphInfo.textContent = `Đoạn ${currentParagraphIndex + 1} / ${paragraphs.length}`;
+            paragraphInfo.textContent = `Đoạn ${currentParagraphIndex + 1} / ${segments.length}`;
         } else {
             paragraphInfo.style.display = 'none';
         }
     }
 
     function updateSliderForParagraphs() {
-        if (paragraphMode && paragraphs.length > 1) {
+        if (paragraphMode && segments.length > 1) {
             slider.min = 0;
-            slider.max = paragraphs.length - 1;
+            slider.max = segments.length - 1;
             slider.value = currentParagraphIndex;
             slider.style.display = 'block';
         } else if (!paragraphMode && fullTextContent) {
@@ -356,10 +469,15 @@
     }
 
     function toggleMode() {
-      //... (Giữ nguyên logic chuyển chế độ)
       if (fullTextContent.length === 0) {
-        showToast('Vui lòng chọn file TXT trước khi chuyển chế độ.');
+        showToast('Vui lòng chọn file TXT/SRT trước khi chuyển chế độ.');
         return;
+      }
+      
+      // Không cho phép chuyển mode nếu là file SRT (luôn ở chế độ segment)
+      if (isSrtFile) {
+          showToast('Chế độ Từng Đoạn được kích hoạt cố định cho file SRT. Vui lòng tải file TXT để chuyển chế độ.');
+          return;
       }
 
       paragraphMode = !paragraphMode;
@@ -370,12 +488,12 @@
         modeBtn.textContent = "📜 Chế độ cuộn liên tục";
         paragraphTimeLabel.style.display = "flex";
         
-        // Tái tạo paragraphs dựa trên cài đặt maxCharsPerDisplay hiện tại
+        // Tái tạo segments (paragraphs) dựa trên cài đặt maxCharsPerDisplay hiện tại
         const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
-        paragraphs = preprocessParagraphs(rawParagraphs); 
+        segments = preprocessParagraphs(rawParagraphs); 
         currentParagraphIndex = 0;
 
-        if (paragraphs.length > 0) {
+        if (segments.length > 0) {
           showCurrentParagraph();
         }
       } else {
@@ -389,21 +507,45 @@
       saveProgress(); 
     }
 
-    // Hàm showCurrentParagraph đã được ĐƠN GIẢN HÓA
-    // vì việc cắt chữ thông minh đã được xử lý trong preprocessParagraphs
+    /**
+     * Hiển thị đoạn/segment hiện tại (Hỗ trợ cả SRT và TXT)
+     */
     function showCurrentParagraph(shouldSave = true) {
-      if (paragraphs.length > 0 && currentParagraphIndex < paragraphs.length) {
-        // Nội dung hiển thị chính là đoạn đã được chia nhỏ
-        const displayContent = paragraphs[currentParagraphIndex]; 
-        displayArea.textContent = displayContent;
+      if (segments.length > 0 && currentParagraphIndex < segments.length) {
+        const currentSegment = segments[currentParagraphIndex];
+
+        let displayContent;
+        let notificationBody = '';
+
+        if (isSrtFile) {
+            // SRT Mode: Format output as Timestamp -> Korean -> Vietnamese
+            displayContent = `
+                <div class="srt-segment">
+                    <span class="srt-time">${currentSegment.start} --> ${currentSegment.end}</span>
+                    <div class="srt-korean">${currentSegment.korean}</div>
+                    <div class="srt-vietnamese">${currentSegment.vietnamese}</div>
+                </div>
+            `;
+            // Nội dung thông báo bao gồm cả 2 ngôn ngữ
+            notificationBody = `${currentSegment.korean} | ${currentSegment.vietnamese}`;
+            
+            displayArea.innerHTML = displayContent;
+            
+        } else {
+            // TXT Mode (original logic): Display only the paragraph text
+            displayContent = currentSegment; 
+            displayArea.textContent = displayContent;
+            
+            // Notification body uses the smartTruncate logic for TXT
+            notificationBody = smartTruncate(displayContent, parseInt(document.getElementById("maxCharsPerNotif").value) || 100, true); 
+        }
 
         // Gửi thông báo (chỉ ở chế độ đoạn)
         if (pushEnabled) {
             const maxCharsNotif = parseInt(document.getElementById("maxCharsPerNotif").value) || 100;
-            // Cắt đoạn để gửi thông báo (CÓ THÊM ...)
-            const notificationBody = smartTruncate(displayContent, maxCharsNotif, true); 
-            const title = `Đọc: Đoạn ${currentParagraphIndex + 1}/${paragraphs.length}`;
-            sendNotification(title, notificationBody);
+            const finalNotifBody = smartTruncate(notificationBody, maxCharsNotif, true); 
+            const title = `Đọc: Đoạn ${currentParagraphIndex + 1}/${segments.length}`;
+            sendNotification(title, finalNotifBody);
         }
 
         updateParagraphInfo();
@@ -413,7 +555,7 @@
     }
 
     function nextParagraph() {
-      if (currentParagraphIndex < paragraphs.length - 1) {
+      if (currentParagraphIndex < segments.length - 1) {
         currentParagraphIndex++;
         showCurrentParagraph();
       }
@@ -428,9 +570,8 @@
 
 
     function toggleScroll() {
-      //... (Giữ nguyên logic toggleScroll)
       if (fullTextContent.length === 0) {
-        showToast('Vui lòng chọn file TXT trước khi bắt đầu cuộn/đọc tự động.');
+        showToast('Vui lòng chọn file TXT/SRT trước khi bắt đầu cuộn/đọc tự động.');
         return;
       }
       
@@ -450,11 +591,19 @@
         }
 
         if (paragraphMode) {
+          // Chế độ Từng Đoạn (SRT hoặc TXT)
           const paragraphTime = parseFloat(document.getElementById("paragraphTime").value) * 1000; 
           interval = setInterval(() => {
+            // Nếu đã đến đoạn cuối, dừng lại
+            if (currentParagraphIndex >= segments.length - 1) { 
+                 restoreControls();
+                 showToast("Đã hoàn thành toàn bộ nội dung.");
+                 return;
+            }
             nextParagraph();
           }, paragraphTime);
         } else {
+          // Chế độ Cuộn Liên Tục (Chỉ TXT)
           interval = setInterval(() => {
             if (displayArea.scrollTop >= (displayArea.scrollHeight - displayArea.clientHeight)) {
                 restoreControls(); 
@@ -466,13 +615,12 @@
           }, 100);
         }
       } else {
-        scrollBtn.textContent = '▶️ Bắt đầu';
+        scrollBtn.textContent = '▶️ Bắt đầu / ⏸️ Dừng';
         clearInterval(interval);
         saveProgress(); 
       }
     }
     
-    //... (Các hàm khác giữ nguyên)
     function restoreControls() {
       clearInterval(interval);
       scrolling = false;
@@ -520,7 +668,7 @@
     });
 
     slider.addEventListener("input", () => {
-      if (paragraphMode && paragraphs.length > 1) {
+      if (paragraphMode && segments.length > 1) {
         const paragraphIndex = parseInt(slider.value);
         currentParagraphIndex = paragraphIndex;
         showCurrentParagraph();
@@ -530,13 +678,12 @@
       }
     });
 
-    // Lắng nghe sự kiện input cho cài đặt giới hạn hiển thị
+    // Lắng nghe sự kiện input cho cài đặt giới hạn hiển thị (Chỉ dùng cho TXT)
     maxCharsDisplayInput.addEventListener("input", function() {
         saveProgress();
-        // Cần tải lại paragraphs khi cài đặt này thay đổi ở chế độ đoạn
-        if (paragraphMode && fullTextContent) {
+        if (paragraphMode && fullTextContent && !isSrtFile) {
             const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
-            paragraphs = preprocessParagraphs(rawParagraphs); 
+            segments = preprocessParagraphs(rawParagraphs); 
             currentParagraphIndex = 0;
             showCurrentParagraph();
         }
@@ -555,6 +702,14 @@
     document.getElementById("speedRange").addEventListener("input", saveProgress);
     document.getElementById("paragraphTime").addEventListener("input", saveProgress); 
     document.getElementById("maxCharsPerNotif").addEventListener("input", saveProgress);
+
+    // Hàm xóa tiến trình
+    function clearProgress() {
+        localStorage.removeItem('textReaderProgress');
+        showToast('🧹 Đã xóa tiến trình đã lưu.');
+        location.reload(); 
+    }
+    window.clearProgress = clearProgress; // Cần thiết để hàm có thể được gọi từ HTML
 
     function updateClock() {
       const now = new Date();
@@ -584,19 +739,18 @@
     bubble.ondragstart = () => false;
 
     document.addEventListener('keydown', function(e) {
-      if (fullTextContent.length > 0 && !scrolling) {
-          if (paragraphMode) {
-              if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                nextParagraph();
-              } else if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                previousParagraph();
-              }
-          } else if (e.key === ' ') { 
-              e.preventDefault();
-              toggleScroll();
+      // Chỉ cho phép điều hướng bằng phím mũi tên khi đang ở chế độ đoạn và không cuộn tự động
+      if (fullTextContent.length > 0 && paragraphMode && !scrolling) {
+          if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            nextParagraph();
+          } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            previousParagraph();
           }
+      } else if (fullTextContent.length > 0 && e.key === ' ') {
+          e.preventDefault();
+          toggleScroll();
       }
     });
 
