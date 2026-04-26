@@ -2,759 +2,873 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Trình đọc file SRT/TXT (Có Thông Báo)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>Trình đọc SRT/TXT - Lưu riêng theo từng file</title>
   <style>
-    /* CSS giữ nguyên như cũ */
-    body { 
-      font-family: sans-serif; 
-      margin: 0; 
-      padding: 20px; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      background: black; 
-      color: white; 
-      transition: 0.3s;
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, 'Segoe UI', 'Roboto', sans-serif;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #000000;
+      color: #f0f0f0;
+      transition: 0.2s;
       min-height: 120vh;
       overflow-x: hidden;
     }
-    #clock { font-size: 4em; margin-top: 20px; font-weight: bold; text-align: center; }
-    #date { font-size: 1.2em; text-align: center; margin-bottom: 10px; }
-    #controls { margin: 10px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; transition: 0.3s; }
-    button, input[type="range"], input[type="number"], .setting-group { padding: 6px 12px; font-size: 1em; cursor: pointer; border-radius: 8px; border: none;}
-    #pushNotificationBtn { background: linear-gradient(135deg, #1565c0, #6a1b9a); color: white; font-weight: bold; }
-    #pushNotificationBtn.active { background: linear-gradient(135deg, #2e7d32, #43a047); }
-    .setting-group { background: #333; color: white; display: flex; align-items: center; gap: 5px; }
-    input[type="number"] { background: #444; color: white; border: 1px solid #555; width: 50px; text-align: center;}
+
+    #clock {
+      font-size: 4em;
+      margin-top: 20px;
+      font-weight: bold;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+
+    #date {
+      font-size: 1.2em;
+      text-align: center;
+      margin-bottom: 10px;
+      color: #aaa;
+    }
+
+    #controls {
+      margin: 10px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      transition: 0.3s;
+      background: rgba(0,0,0,0.7);
+      padding: 12px;
+      border-radius: 40px;
+      backdrop-filter: blur(4px);
+    }
+
+    button, input[type="range"], input[type="number"], .setting-group {
+      padding: 8px 14px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border-radius: 40px;
+      border: none;
+      font-weight: 500;
+    }
+
+    button {
+      background: #1f2a3e;
+      color: white;
+      transition: 0.2s;
+    }
+    button:hover {
+      background: #2c3e66;
+      transform: scale(0.97);
+    }
+
+    #pushNotificationBtn {
+      background: linear-gradient(135deg, #1565c0, #6a1b9a);
+      color: white;
+      font-weight: bold;
+    }
+    #pushNotificationBtn.active {
+      background: linear-gradient(135deg, #2e7d32, #43a047);
+    }
+
+    .setting-group {
+      background: #1e1e2f;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 40px;
+    }
+    input[type="number"] {
+      background: #2c2c3a;
+      color: white;
+      border: 1px solid #555;
+      width: 70px;
+      border-radius: 30px;
+      text-align: center;
+    }
+    input[type="range"] {
+      width: 140px;
+    }
+
     #displayArea {
       max-height: 60vh;
-      width: 90%;
+      width: 92%;
       overflow-y: auto;
-      padding: 1rem;
-      background: #111;
-      border: 1px solid #444;
+      padding: 1.5rem;
+      background: #0f0f17;
+      border: 1px solid #2c2c3a;
       font-size: 1.2em;
       line-height: 1.6;
       white-space: pre-wrap;
-      transition: height 0.3s, max-height 0.3s;
+      border-radius: 28px;
+      transition: all 0.2s;
+      margin: 10px 0;
     }
 
-    /* === NEW STYLES FOR SRT MODE === */
     #displayArea.srt-mode {
-        display: flex;
-        flex-direction: column;
-        justify-content: center; /* Center the segment vertically */
-        align-items: flex-start;
-        text-align: left;
-        overflow-y: hidden; /* Prevent scrolling in SRT segment mode */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      text-align: left;
+      overflow-y: hidden;
     }
-    .srt-segment { 
-        margin-bottom: 25px; 
-        border-left: 5px solid #0af; 
-        padding-left: 15px;
-    }
-    .srt-time { 
-        font-size: 0.9em; 
-        color: #888; 
-        margin-bottom: 5px;
-        display: block;
-        font-family: monospace;
-    }
-    .srt-korean { 
-        font-weight: bold; 
-        color: #f7f7f7; 
-        font-size: 1.4em;
-        line-height: 1.4;
-        margin-bottom: 5px;
-    }
-    .srt-vietnamese { 
-        color: #b0e0ff; 
-        font-style: italic; 
-        font-size: 1.1em;
-    }
-    /* =============================== */
 
-    #scrollSlider { width: 90%; margin: 10px 0; accent-color: #0af; }
+    .srt-segment {
+      margin-bottom: 25px;
+      border-left: 5px solid #3b82f6;
+      padding-left: 18px;
+      width: 100%;
+    }
+    .srt-time {
+      font-size: 0.85rem;
+      color: #aaa;
+      font-family: monospace;
+      margin-bottom: 6px;
+    }
+    .srt-korean {
+      font-weight: bold;
+      color: #ffffff;
+      font-size: 1.45em;
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+    .srt-vietnamese {
+      color: #b9e6ff;
+      font-style: italic;
+      font-size: 1.1em;
+    }
+
+    #scrollSlider {
+      width: 86%;
+      margin: 12px 0;
+      accent-color: #3b82f6;
+    }
+
     #bubble {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #0af;
+      bottom: 24px;
+      right: 24px;
+      background: #0b5e7e;
       color: white;
-      padding: 12px;
+      padding: 14px;
       border-radius: 50%;
-      font-size: 1.2em;
+      font-size: 1.4rem;
       cursor: move;
       display: none;
       user-select: none;
       z-index: 1000;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+      width: 56px;
+      height: 56px;
+      text-align: center;
+      line-height: 1.2;
     }
+
     #paragraphInfo {
-      margin: 10px 0;
-      font-size: 1em;
-      color: #ccc;
+      margin: 8px 0;
+      font-size: 0.9rem;
+      background: #1f1f2b;
+      padding: 5px 14px;
+      border-radius: 60px;
+      color: #bbd9ff;
     }
+
     .scroll-padding {
-      height: 100px;
+      height: 70px;
       width: 100%;
       opacity: 0;
-      pointer-events: none;
     }
-    .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(30,30,30,0.95); padding: 12px 24px; border-radius: 30px; opacity: 0; transition: 0.3s; pointer-events: none; border: 1px solid #555; z-index: 10000; font-weight: bold; color: white;}
+
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20,20,35,0.96);
+      backdrop-filter: blur(12px);
+      padding: 12px 26px;
+      border-radius: 50px;
+      opacity: 0;
+      transition: 0.2s;
+      pointer-events: none;
+      border: 1px solid #3b82f6;
+      z-index: 10000;
+      font-weight: bold;
+      color: white;
+      font-size: 0.9rem;
+    }
     .toast.show { opacity: 1; }
+
+    /* lịch sử file */
+    .file-history {
+      margin: 12px auto;
+      width: 92%;
+      background: #0a0a12cc;
+      backdrop-filter: blur(8px);
+      border-radius: 30px;
+      padding: 8px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+      border: 1px solid #2c2c44;
+    }
+    .history-label {
+      font-size: 0.85rem;
+      font-weight: bold;
+      background: #2c2c44;
+      padding: 4px 12px;
+      border-radius: 40px;
+    }
+    .history-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .history-item {
+      background: #1e2a3a;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 40px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: 0.1s;
+      color: #cbd5e6;
+    }
+    .history-item:hover {
+      background: #2c4c6c;
+      color: white;
+    }
+    .history-item.active-file {
+      background: #2563eb;
+      color: white;
+      box-shadow: 0 0 6px #3b82f6;
+    }
+    .clear-history-btn {
+      background: #4a2a2a;
+      color: #ffb3b3;
+      font-size: 0.75rem;
+    }
   </style>
 </head>
 <body>
-  <div class="scroll-padding"></div>
+<div class="scroll-padding"></div>
 
-  <div id="clock">00:00</div>
-  <div id="date">-- -- ----</div>
+<div id="clock">00:00</div>
+<div id="date">-- -- ----</div>
 
-  <h2>📄 Trình đọc file SRT/TXT</h2>
-  <input type="file" id="fileInput" accept=".txt,.srt">
+<h2>📖 Trình đọc SRT/TXT - Lưu riêng theo file</h2>
+<input type="file" id="fileInput" accept=".txt,.srt">
 
-  <div id="controls">
-    <button onclick="toggleScroll()">▶️ Bắt đầu / ⏸️ Dừng</button>
-    <button onclick="toggleMode()" id="modeBtn">📖 Chế độ từng đoạn</button>
-    <button onclick="clearProgress()" title="Xóa tiến trình đã lưu">🧹 Xóa tiến trình</button>
-    <button id="pushNotificationBtn">🔔 Bật thông báo</button> 
-    
-    <div class="setting-group">⌚ Cỡ ĐH: <input type="range" min="2" max="8" value="4" step="0.1" id="clockSize"></div>
-    <div class="setting-group">📏 Cao khung: <input type="range" min="30" max="90" value="60" id="areaHeight"></div>
-    
-    <div class="setting-group" id="speedGroup">🚀 Tốc độ (TXT): <input type="range" min="1" max="10" value="3" id="speedRange"></div>
-    
-    <label id="paragraphTimeLabel" style="display: none;" class="setting-group">⏱️ Tg/đoạn (s): <input type="number" min="1" max="60" value="3" id="paragraphTime"></label>
-    
-    <div class="setting-group" id="maxCharsDisplayGroup" style="display: none;">
-        <label for="maxCharsPerDisplay">🔠 Max Chữ Hiển Thị (TXT):</label> 
-        <input type="number" min="50" max="5000" value="500" id="maxCharsPerDisplay">
-    </div>
-    
-    <div class="setting-group">📝 Max Chữ thông báo: <input type="number" min="10" max="500" id="maxCharsPerNotif" value="100"></div> 
+<!-- Lịch sử file đã đọc -->
+<div class="file-history" id="fileHistoryPanel">
+  <span class="history-label">📁 Lịch sử file đã mở:</span>
+  <div class="history-buttons" id="historyListContainer"></div>
+  <button id="clearAllHistoryBtn" class="clear-history-btn">🗑️ Xóa hết LS</button>
+</div>
+
+<div id="controls">
+  <button onclick="toggleScroll()">▶️ Bắt đầu / ⏸️ Dừng</button>
+  <button onclick="toggleMode()" id="modeBtn">📖 Chế độ từng đoạn</button>
+  <button onclick="clearCurrentFileProgress()" title="Xóa tiến trình file hiện tại">🧹 Xóa tiến trình file này</button>
+  <button id="pushNotificationBtn">🔔 Bật thông báo</button> 
+  
+  <div class="setting-group">⌚ Cỡ ĐH: <input type="range" min="2" max="8" value="4" step="0.1" id="clockSize"></div>
+  <div class="setting-group">📏 Cao khung: <input type="range" min="30" max="90" value="60" id="areaHeight"></div>
+  <div class="setting-group" id="speedGroup">🚀 Tốc độ (TXT): <input type="range" min="1" max="10" value="3" id="speedRange"></div>
+  <label id="paragraphTimeLabel" style="display: none;" class="setting-group">⏱️ Tg/đoạn (s): <input type="number" min="1" max="60" value="3" id="paragraphTime"></label>
+  <div class="setting-group" id="maxCharsDisplayGroup" style="display: none;">
+    <label for="maxCharsPerDisplay">🔠 Max Chữ Hiển Thị (TXT):</label> 
+    <input type="number" min="50" max="5000" value="500" id="maxCharsPerDisplay">
   </div>
+  <div class="setting-group">📝 Max Chữ thông báo: <input type="number" min="10" max="500" id="maxCharsPerNotif" value="100"></div> 
+</div>
 
-  <div id="paragraphInfo"></div>
+<div id="paragraphInfo"></div>
+<input type="range" min="0" max="100" value="0" id="scrollSlider">
+<div id="displayArea">📂 Vui lòng chọn file TXT hoặc SRT để hiển thị nội dung...</div>
+<div id="bubble" onclick="restoreControls()">⏸️</div>
+<div id="toast" class="toast"></div>
 
-  <input type="range" min="0" max="100" value="0" id="scrollSlider">
-
-  <div id="displayArea">📂 Vui lòng chọn file TXT hoặc SRT để hiển thị nội dung...</div>
-
-  <div id="bubble" onclick="restoreControls()">⏸️</div>
-  <div id="toast" class="toast"></div>
-
-  <script>
-    let scrolling = false;
-    let interval;
-    let paragraphMode = false;
-    let segments = []; // Đổi tên từ 'paragraphs' thành 'segments'
-    let currentParagraphIndex = 0;
-    let currentFileName = '';
-    let fullTextContent = ''; 
-    let pushEnabled = false; 
-    let isSrtFile = false; // Biến mới để kiểm tra loại file
-    
-    const displayArea = document.getElementById("displayArea");
-    const slider = document.getElementById("scrollSlider");
-    const bubble = document.getElementById("bubble");
-    const controls = document.getElementById("controls");
-    const paragraphInfo = document.getElementById("paragraphInfo");
-    const notifBtn = document.getElementById('pushNotificationBtn');
-    const toastEl = document.getElementById('toast');
-    const maxCharsDisplayInput = document.getElementById("maxCharsPerDisplay");
-    const maxCharsDisplayGroup = document.getElementById("maxCharsDisplayGroup");
-
-
-    const SESSION_ID = 'text_reader_' + Date.now();
-    const DEFAULT_TEXT = '📂 Vui lòng chọn file TXT hoặc SRT để hiển thị nội dung...';
-
-
-    window.addEventListener('load', function() {
-      setTimeout(() => {
-        window.scrollTo(0, 50);
-        restoreProgress(); 
-      }, 100);
-    });
-
-    // --- UTILITIES ---
-
-    function showToast(msg) { 
-        toastEl.textContent=msg; 
-        toastEl.classList.add('show'); 
-        setTimeout(()=>toastEl.classList.remove('show'),3000); 
-    }
-
-    /**
-     * Cắt văn bản thông minh tại dấu cách gần nhất.
-     */
-    function smartTruncate(text, maxChars, addEllipsis = false) {
-        if (text.length <= maxChars) {
-            return text;
-        }
-        let truncated = text.substring(0, maxChars);
-        const lastSpace = truncated.lastIndexOf(' ');
-        
-        if (lastSpace !== -1) {
-            const result = truncated.substring(0, lastSpace);
-            return addEllipsis ? result + '...' : result;
-        }
-        return addEllipsis ? truncated + '...' : truncated; 
-    }
-    
-    /**
-     * Hàm phân tích cú pháp file SRT (Chỉ dành cho SRT song ngữ 2 dòng)
-     * @param {string} srtContent - Nội dung file SRT
-     * @returns {Array<Object>} - Mảng các đối tượng segment đã phân tích
-     */
-    function parseSrt(srtContent) {
-        const lines = srtContent.split('\n');
-        const newSegments = [];
-        let currentSegment = {};
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-
-            if (!line) {
-                // Kết thúc segment
-                if (currentSegment.korean && currentSegment.vietnamese) {
-                    newSegments.push(currentSegment);
-                }
-                currentSegment = {};
-                continue;
-            }
-
-            // 1. Segment Index (Bỏ qua hoặc dùng để kiểm tra)
-            if (!isNaN(parseInt(line)) && !currentSegment.index) {
-                currentSegment.index = parseInt(line);
-                continue;
-            }
-
-            // 2. Timestamps
-            if (line.includes('-->') && !currentSegment.start) {
-                const parts = line.split('-->');
-                currentSegment.start = parts[0].trim();
-                currentSegment.end = parts[1].trim();
-                continue;
-            }
-
-            // 3. Korean/Vietnamese text (Giả sử dòng đầu là Hàn, dòng sau là Việt)
-            if (currentSegment.index && currentSegment.start) {
-                if (!currentSegment.korean) {
-                    currentSegment.korean = line;
-                } else if (!currentSegment.vietnamese) {
-                    currentSegment.vietnamese = line;
-                }
-            }
-        }
-        // Thêm segment cuối cùng nếu có
-        if (currentSegment.korean && currentSegment.vietnamese) {
-            newSegments.push(currentSegment);
-        }
-        return newSegments;
-    }
-
-    /**
-     * Logic MỚI: Tự động chia đoạn dài thành các đoạn con (chỉ dùng cho TXT).
-     */
-    function preprocessParagraphs(rawParagraphs) {
-        if (isSrtFile) return []; // Bỏ qua nếu là SRT
-        
-        const maxChars = parseInt(maxCharsDisplayInput.value) || 500;
-        const processed = [];
-
-        rawParagraphs.forEach(p => {
-            let currentText = p.trim();
-            if (currentText.length === 0) return;
-
-            // Nếu đoạn quá ngắn, chỉ thêm nó vào.
-            if (currentText.length <= maxChars) {
-                processed.push(currentText + '.');
-                return;
-            }
-
-            // Chia nhỏ đoạn dài
-            while (currentText.length > 0) {
-                const segment = smartTruncate(currentText, maxChars, false); 
-                
-                if (segment.length === 0 && currentText.length > 0) {
-                    const hardCut = currentText.substring(0, maxChars);
-                    processed.push(hardCut);
-                    currentText = currentText.substring(maxChars).trim();
-                } else if (segment.length > 0) {
-                    processed.push(segment + '.'); 
-                    currentText = currentText.substring(segment.length).trim();
-                } else {
-                    break;
-                }
-            }
-        });
-        return processed;
-    }
-
-
-    // --- LƯU VÀ KHÔI PHỤC TRẠNG THÁI ---
-
-    function saveProgress() {
-      const progress = {
-        sessionId: SESSION_ID,
-        fileName: currentFileName,
-        content: fullTextContent, 
-        paragraphMode: paragraphMode,
-        currentParagraphIndex: currentParagraphIndex,
-        scrollPosition: displayArea.scrollTop,
-        scrollPercentage: slider.value,
-        clockSize: document.getElementById("clockSize").value,
-        areaHeight: document.getElementById("areaHeight").value,
-        speed: document.getElementById("speedRange").value,
-        paragraphTime: document.getElementById("paragraphTime").value, 
-        maxCharsPerNotif: document.getElementById("maxCharsPerNotif").value, 
-        maxCharsPerDisplay: maxCharsDisplayInput.value,
-        isPushEnabled: pushEnabled, 
-        isSrtFile: isSrtFile, // Lưu trạng thái loại file
-        timestamp: Date.now()
-      };
-      
-      localStorage.setItem('textReaderProgress', JSON.stringify(progress));
-    }
-
-    function restoreProgress() {
-      const saved = localStorage.getItem('textReaderProgress');
-      if (!saved) return;
-
-      const progress = JSON.parse(saved);
-      if (progress.sessionId && progress.sessionId !== SESSION_ID) return;
-
-      isSrtFile = progress.isSrtFile || false;
-      
-      // Ẩn/hiện các control chỉ dành cho TXT
-      maxCharsDisplayGroup.style.display = isSrtFile ? 'none' : 'flex';
-      document.getElementById("speedGroup").style.display = isSrtFile ? 'none' : 'flex';
-
-      if (progress.content && progress.content !== DEFAULT_TEXT) {
-        fullTextContent = progress.content; 
-        currentFileName = progress.fileName || '';
-        
-        if (isSrtFile) {
-            segments = parseSrt(fullTextContent);
-        } else {
-            // Tái tạo segments (paragraphs) cho TXT
-            const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
-            segments = preprocessParagraphs(rawParagraphs); 
-        }
-      } else {
-        fullTextContent = '';
-        segments = [];
+<script>
+  // ================== LƯU THEO TÊN FILE (MỖI FILE 1 PROFILE) ==================
+  let currentFileName = '';
+  let currentFileContent = '';
+  let isSrtFile = false;
+  let segments = [];
+  let currentParagraphIndex = 0;
+  let paragraphMode = true;
+  let scrolling = false;
+  let interval = null;
+  let pushEnabled = false;
+  
+  // DOM elements
+  const displayArea = document.getElementById("displayArea");
+  const slider = document.getElementById("scrollSlider");
+  const bubble = document.getElementById("bubble");
+  const controlsDiv = document.getElementById("controls");
+  const paragraphInfoDiv = document.getElementById("paragraphInfo");
+  const notifBtn = document.getElementById('pushNotificationBtn');
+  const toastEl = document.getElementById('toast');
+  const maxCharsDisplayInput = document.getElementById("maxCharsPerDisplay");
+  const maxCharsDisplayGroup = document.getElementById("maxCharsDisplayGroup");
+  const modeBtn = document.getElementById("modeBtn");
+  const paragraphTimeLabel = document.getElementById("paragraphTimeLabel");
+  const speedGroup = document.getElementById("speedGroup");
+  const clockSizeRange = document.getElementById("clockSize");
+  const areaHeightRange = document.getElementById("areaHeight");
+  const speedRange = document.getElementById("speedRange");
+  const paragraphTimeInput = document.getElementById("paragraphTime");
+  const maxCharsNotifInput = document.getElementById("maxCharsPerNotif");
+  
+  function showToast(msg) { 
+    toastEl.textContent = msg; 
+    toastEl.classList.add('show'); 
+    setTimeout(() => toastEl.classList.remove('show'), 2800); 
+  }
+  
+  function smartTruncate(text, maxChars, addEllipsis = false) {
+    if (text.length <= maxChars) return text;
+    let truncated = text.substring(0, maxChars);
+    const lastSpace = truncated.lastIndexOf(' ');
+    if (lastSpace !== -1) truncated = truncated.substring(0, lastSpace);
+    return addEllipsis ? truncated + '...' : truncated;
+  }
+  
+  function parseSrt(srtContent) {
+    const lines = srtContent.split('\n');
+    const newSegments = [];
+    let current = {};
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      if (!line) {
+        if (current.korean && current.vietnamese) newSegments.push(current);
+        current = {};
+        continue;
       }
-
-      if (progress.paragraphMode !== undefined) {
-        paragraphMode = progress.paragraphMode;
-        document.getElementById("modeBtn").textContent = paragraphMode ? "📜 Chế độ cuộn liên tục" : "📖 Chế độ từng đoạn";
-        document.getElementById("paragraphTimeLabel").style.display = paragraphMode ? "flex" : "none";
-        
-        // Thêm class cho SRT mode để điều chỉnh displayArea
-        displayArea.classList.toggle('srt-mode', paragraphMode && isSrtFile);
-        
-        // Khôi phục cài đặt trước khi gọi showCurrentParagraph
-        if (progress.maxCharsPerDisplay) maxCharsDisplayInput.value = progress.maxCharsPerDisplay; 
-
-        if (paragraphMode && segments.length > 0 && progress.currentParagraphIndex !== undefined) {
-          currentParagraphIndex = progress.currentParagraphIndex;
-          showCurrentParagraph(false);
-        } else if (!paragraphMode) {
-            displayArea.textContent = fullTextContent;
-            if (progress.scrollPosition !== undefined) {
-              setTimeout(() => {
-                displayArea.scrollTop = progress.scrollPosition;
-                slider.value = progress.scrollPercentage || 0;
-              }, 100);
-            }
-        }
+      if (!isNaN(parseInt(line)) && !current.index) { current.index = parseInt(line); continue; }
+      if (line.includes('-->') && !current.start) {
+        let parts = line.split('-->');
+        current.start = parts[0].trim();
+        current.end = parts[1].trim();
+        continue;
       }
-
-      // Khôi phục cài đặt khác
-      if (progress.clockSize) document.getElementById("clockSize").value = progress.clockSize;
-      if (progress.areaHeight) document.getElementById("areaHeight").value = progress.areaHeight;
-      if (progress.speed) document.getElementById("speedRange").value = progress.speed;
-      if (progress.paragraphTime) document.getElementById("paragraphTime").value = progress.paragraphTime;
-      if (progress.maxCharsPerNotif) document.getElementById("maxCharsPerNotif").value = progress.maxCharsPerNotif; 
-
-      if (progress.isPushEnabled) {
-          pushEnabled = true;
-          notifBtn.innerHTML = "🔔 Đã bật"; 
-          notifBtn.classList.add('active');
+      if (current.index && current.start) {
+        if (!current.korean) current.korean = line;
+        else if (!current.vietnamese) current.vietnamese = line;
       }
-
-      document.getElementById("clock").style.fontSize = document.getElementById("clockSize").value + "em";
-      displayArea.style.maxHeight = document.getElementById("areaHeight").value + "vh";
-
-      updateParagraphInfo();
-      updateSliderForParagraphs();
     }
-
-
-    // Load file TXT/SRT
-    document.getElementById("fileInput").addEventListener("change", function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      currentFileName = file.name;
-      isSrtFile = file.name.toLowerCase().endsWith('.srt');
-      
-      // Ẩn/hiện các control chỉ dành cho TXT
-      maxCharsDisplayGroup.style.display = isSrtFile ? 'none' : 'flex';
-      document.getElementById("speedGroup").style.display = isSrtFile ? 'none' : 'flex';
-      
-      const reader = new FileReader();
-      reader.onload = function(ev) {
-        fullTextContent = ev.target.result;
-        
-        if (isSrtFile) {
-            // SRT mode: segments là các block phụ đề
-            segments = parseSrt(fullTextContent);
-            paragraphMode = true; // Bật cố định chế độ từng đoạn cho SRT
-            document.getElementById("modeBtn").textContent = "📜 Chế độ cuộn liên tục";
-            document.getElementById("paragraphTimeLabel").style.display = "flex";
-            displayArea.classList.add('srt-mode');
-            showToast(`Đã tải file SRT "${file.name}". Bật chế độ Từng Đoạn.`);
-
-        } else {
-            // TXT mode: dùng lại logic chia đoạn cũ
-            const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
-            segments = preprocessParagraphs(rawParagraphs); 
-            displayArea.classList.remove('srt-mode');
-            showToast(`Đã tải file TXT "${file.name}"`);
-        }
-
-        currentParagraphIndex = 0;
-        
-        if (paragraphMode) {
-            showCurrentParagraph(false);
-        } else {
-            displayArea.textContent = fullTextContent;
-        }
-
-        updateParagraphInfo();
-        updateSliderForParagraphs();
-        saveProgress(); 
-      };
-      reader.readAsText(file);
-    });
-
-    // --- LOGIC CHUYỂN ĐOẠN/CUỘN ---
-    
-    function updateParagraphInfo() {
-        if (paragraphMode && segments.length > 0) {
-            paragraphInfo.style.display = 'block';
-            paragraphInfo.textContent = `Đoạn ${currentParagraphIndex + 1} / ${segments.length}`;
-        } else {
-            paragraphInfo.style.display = 'none';
-        }
-    }
-
-    function updateSliderForParagraphs() {
-        if (paragraphMode && segments.length > 1) {
-            slider.min = 0;
-            slider.max = segments.length - 1;
-            slider.value = currentParagraphIndex;
-            slider.style.display = 'block';
-        } else if (!paragraphMode && fullTextContent) {
-            slider.min = 0;
-            slider.max = 100;
-            slider.style.display = 'block';
-        } else {
-            slider.style.display = 'none';
-        }
-    }
-
-    function toggleMode() {
-      if (fullTextContent.length === 0) {
-        showToast('Vui lòng chọn file TXT/SRT trước khi chuyển chế độ.');
+    if (current.korean && current.vietnamese) newSegments.push(current);
+    return newSegments;
+  }
+  
+  function preprocessParagraphs(rawParagraphs) {
+    if (isSrtFile) return [];
+    const maxChars = parseInt(maxCharsDisplayInput.value) || 500;
+    const processed = [];
+    rawParagraphs.forEach(p => {
+      let currentText = p.trim();
+      if (currentText.length === 0) return;
+      if (currentText.length <= maxChars) {
+        processed.push(currentText + '.');
         return;
       }
-      
-      // Không cho phép chuyển mode nếu là file SRT (luôn ở chế độ segment)
-      if (isSrtFile) {
-          showToast('Chế độ Từng Đoạn được kích hoạt cố định cho file SRT. Vui lòng tải file TXT để chuyển chế độ.');
-          return;
+      while (currentText.length > 0) {
+        let segment = smartTruncate(currentText, maxChars, false);
+        if (segment.length === 0) {
+          let hardCut = currentText.substring(0, maxChars);
+          processed.push(hardCut);
+          currentText = currentText.substring(maxChars).trim();
+        } else {
+          processed.push(segment + '.');
+          currentText = currentText.substring(segment.length).trim();
+        }
       }
-
-      paragraphMode = !paragraphMode;
-      const modeBtn = document.getElementById("modeBtn");
-      const paragraphTimeLabel = document.getElementById("paragraphTimeLabel");
+    });
+    return processed;
+  }
+  
+  // ========== LƯU PROFILE THEO TÊN FILE (MỖI FILE 1 KEY RIÊNG) ==========
+  function saveProgressForCurrentFile() {
+    if (!currentFileName) return;
+    
+    const progress = {
+      fileName: currentFileName,
+      content: currentFileContent,
+      isSrtFile: isSrtFile,
+      paragraphMode: paragraphMode,
+      currentParagraphIndex: currentParagraphIndex,
+      scrollPosition: displayArea.scrollTop,
+      scrollPercentage: slider.value,
+      clockSize: clockSizeRange.value,
+      areaHeight: areaHeightRange.value,
+      speed: speedRange.value,
+      paragraphTime: paragraphTimeInput.value,
+      maxCharsPerDisplay: maxCharsDisplayInput.value,
+      maxCharsPerNotif: maxCharsNotifInput.value,
+      pushEnabled: pushEnabled,
+      timestamp: Date.now()
+    };
+    
+    // 🔑 MỖI FILE LƯU VÀO 1 KEY RIÊNG: "textReader_" + tên file
+    const storageKey = 'textReader_' + currentFileName;
+    localStorage.setItem(storageKey, JSON.stringify(progress));
+    
+    // Cập nhật lịch sử file đã mở
+    updateFileHistory(currentFileName);
+  }
+  
+  // ========== PHỤC HỒI PROFILE THEO TÊN FILE ==========
+  function restoreProgressForFile(fileName) {
+    const storageKey = 'textReader_' + fileName;
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return false;
+    
+    try {
+      const progress = JSON.parse(saved);
       
-      if (paragraphMode) {
+      // Khôi phục nội dung
+      currentFileName = progress.fileName;
+      currentFileContent = progress.content;
+      isSrtFile = progress.isSrtFile || false;
+      paragraphMode = (progress.paragraphMode !== undefined) ? progress.paragraphMode : true;
+      currentParagraphIndex = progress.currentParagraphIndex || 0;
+      pushEnabled = progress.pushEnabled || false;
+      
+      // Khôi phục cài đặt UI
+      clockSizeRange.value = progress.clockSize || 4;
+      areaHeightRange.value = progress.areaHeight || 60;
+      speedRange.value = progress.speed || 3;
+      paragraphTimeInput.value = progress.paragraphTime || 3;
+      maxCharsDisplayInput.value = progress.maxCharsPerDisplay || 500;
+      maxCharsNotifInput.value = progress.maxCharsPerNotif || 100;
+      
+      document.getElementById("clock").style.fontSize = clockSizeRange.value + "em";
+      displayArea.style.maxHeight = areaHeightRange.value + "vh";
+      
+      if (pushEnabled) {
+        notifBtn.innerHTML = "🔔 Đã bật";
+        notifBtn.classList.add('active');
+      } else {
+        notifBtn.innerHTML = "🔔 Bật thông báo";
+        notifBtn.classList.remove('active');
+      }
+      
+      // Hiển thị theo loại file
+      maxCharsDisplayGroup.style.display = isSrtFile ? 'none' : 'flex';
+      speedGroup.style.display = isSrtFile ? 'none' : 'flex';
+      
+      if (isSrtFile) {
+        segments = parseSrt(currentFileContent);
+        displayArea.classList.add('srt-mode');
         modeBtn.textContent = "📜 Chế độ cuộn liên tục";
         paragraphTimeLabel.style.display = "flex";
-        
-        // Tái tạo segments (paragraphs) dựa trên cài đặt maxCharsPerDisplay hiện tại
-        const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
-        segments = preprocessParagraphs(rawParagraphs); 
-        currentParagraphIndex = 0;
-
-        if (segments.length > 0) {
-          showCurrentParagraph();
-        }
       } else {
-        modeBtn.textContent = "📖 Chế độ từng đoạn";
-        paragraphTimeLabel.style.display = "none";
-        displayArea.textContent = fullTextContent; 
-        displayArea.scrollTop = 0; 
+        displayArea.classList.remove('srt-mode');
+        const rawParagraphs = currentFileContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
+        segments = preprocessParagraphs(rawParagraphs);
+        modeBtn.textContent = paragraphMode ? "📜 Chế độ cuộn liên tục" : "📖 Chế độ từng đoạn";
+        paragraphTimeLabel.style.display = paragraphMode ? "flex" : "none";
       }
+      
+      // Khôi phục vị trí đọc
+      if (paragraphMode && segments.length > 0) {
+        if (currentParagraphIndex >= segments.length) currentParagraphIndex = segments.length - 1;
+        if (currentParagraphIndex < 0) currentParagraphIndex = 0;
+        showCurrentParagraph(false);
+      } else if (!paragraphMode && !isSrtFile) {
+        displayArea.textContent = currentFileContent;
+        if (progress.scrollPosition) {
+          setTimeout(() => {
+            displayArea.scrollTop = progress.scrollPosition || 0;
+            slider.value = progress.scrollPercentage || 0;
+          }, 50);
+        }
+      }
+      
       updateParagraphInfo();
       updateSliderForParagraphs();
-      saveProgress(); 
-    }
-
-    /**
-     * Hiển thị đoạn/segment hiện tại (Hỗ trợ cả SRT và TXT)
-     */
-    function showCurrentParagraph(shouldSave = true) {
-      if (segments.length > 0 && currentParagraphIndex < segments.length) {
-        const currentSegment = segments[currentParagraphIndex];
-
-        let displayContent;
-        let notificationBody = '';
-
-        if (isSrtFile) {
-            // SRT Mode: Format output as Timestamp -> Korean -> Vietnamese
-            displayContent = `
-                <div class="srt-segment">
-                    <span class="srt-time">${currentSegment.start} --> ${currentSegment.end}</span>
-                    <div class="srt-korean">${currentSegment.korean}</div>
-                    <div class="srt-vietnamese">${currentSegment.vietnamese}</div>
-                </div>
-            `;
-            // Nội dung thông báo bao gồm cả 2 ngôn ngữ
-            notificationBody = `${currentSegment.korean} | ${currentSegment.vietnamese}`;
-            
-            displayArea.innerHTML = displayContent;
-            
-        } else {
-            // TXT Mode (original logic): Display only the paragraph text
-            displayContent = currentSegment; 
-            displayArea.textContent = displayContent;
-            
-            // Notification body uses the smartTruncate logic for TXT
-            notificationBody = smartTruncate(displayContent, parseInt(document.getElementById("maxCharsPerNotif").value) || 100, true); 
-        }
-
-        // Gửi thông báo (chỉ ở chế độ đoạn)
-        if (pushEnabled) {
-            const maxCharsNotif = parseInt(document.getElementById("maxCharsPerNotif").value) || 100;
-            const finalNotifBody = smartTruncate(notificationBody, maxCharsNotif, true); 
-            const title = `Đọc: Đoạn ${currentParagraphIndex + 1}/${segments.length}`;
-            sendNotification(title, finalNotifBody);
-        }
-
-        updateParagraphInfo();
-        updateSliderForParagraphs();
-        if (shouldSave) saveProgress(); 
-      }
-    }
-
-    function nextParagraph() {
-      if (currentParagraphIndex < segments.length - 1) {
-        currentParagraphIndex++;
-        showCurrentParagraph();
-      }
-    }
-    
-    function previousParagraph() {
-      if (currentParagraphIndex > 0) {
-        currentParagraphIndex--;
-        showCurrentParagraph();
-      }
-    }
-
-
-    function toggleScroll() {
-      if (fullTextContent.length === 0) {
-        showToast('Vui lòng chọn file TXT/SRT trước khi bắt đầu cuộn/đọc tự động.');
-        return;
-      }
+      updateFileHistory(currentFileName);
+      renderHistoryList();
       
-      scrolling = !scrolling;
-      const scrollBtn = document.querySelector("#controls button");
-
-      if (scrolling) {
-        scrollBtn.textContent = '⏸️ Dừng';
-        controls.style.display = "none";
-        bubble.style.display = "block";
-        document.querySelector("h2").style.display = "none";
-        document.getElementById("fileInput").style.display = "none";
-        paragraphInfo.style.display = "none";
-        
-        if (!paragraphMode && pushEnabled) {
-             sendNotification('🚀 Bắt đầu cuộn', 'Màn hình sẽ cuộn liên tục...');
-        }
-
-        if (paragraphMode) {
-          // Chế độ Từng Đoạn (SRT hoặc TXT)
-          const paragraphTime = parseFloat(document.getElementById("paragraphTime").value) * 1000; 
-          interval = setInterval(() => {
-            // Nếu đã đến đoạn cuối, dừng lại
-            if (currentParagraphIndex >= segments.length - 1) { 
-                 restoreControls();
-                 showToast("Đã hoàn thành toàn bộ nội dung.");
-                 return;
-            }
-            nextParagraph();
-          }, paragraphTime);
-        } else {
-          // Chế độ Cuộn Liên Tục (Chỉ TXT)
-          interval = setInterval(() => {
-            if (displayArea.scrollTop >= (displayArea.scrollHeight - displayArea.clientHeight)) {
-                restoreControls(); 
-                return;
-            }
-            displayArea.scrollTop += parseInt(document.getElementById("speedRange").value);
-            slider.value = (displayArea.scrollTop / (displayArea.scrollHeight - displayArea.clientHeight)) * 100;
-            saveProgress(); 
-          }, 100);
-        }
-      } else {
-        scrollBtn.textContent = '▶️ Bắt đầu / ⏸️ Dừng';
-        clearInterval(interval);
-        saveProgress(); 
-      }
+      showToast(`📂 Đã khôi phục: ${currentFileName} | Đoạn ${currentParagraphIndex+1}/${segments.length}`);
+      return true;
+    } catch(e) {
+      console.warn("Lỗi khôi phục:", e);
+      return false;
     }
-    
-    function restoreControls() {
-      clearInterval(interval);
-      scrolling = false;
-      controls.style.display = "flex";
-      bubble.style.display = "none";
-      document.querySelector("h2").style.display = "block";
-      document.getElementById("fileInput").style.display = "block";
-      document.querySelector("#controls button").textContent = '▶️ Bắt đầu / ⏸️ Dừng';
-      updateParagraphInfo();
-      saveProgress(); 
+  }
+  
+  // ========== QUẢN LÝ LỊCH SỬ FILE ĐÃ MỞ ==========
+  function getFileHistoryList() {
+    const history = localStorage.getItem('fileHistoryList');
+    return history ? JSON.parse(history) : [];
+  }
+  
+  function updateFileHistory(fileName) {
+    let history = getFileHistoryList();
+    // Xóa cũ nếu có, thêm vào đầu
+    history = history.filter(name => name !== fileName);
+    history.unshift(fileName);
+    // Giữ tối đa 20 file
+    if (history.length > 20) history.pop();
+    localStorage.setItem('fileHistoryList', JSON.stringify(history));
+  }
+  
+  function renderHistoryList() {
+    const container = document.getElementById("historyListContainer");
+    if (!container) return;
+    const history = getFileHistoryList();
+    container.innerHTML = '';
+    if (history.length === 0) {
+      container.innerHTML = '<span style="font-size:0.75rem; color:#aaa;">Chưa có file nào</span>';
+      return;
     }
-    
-    function sendNotification(title, body) {
-      if (!pushEnabled) return;
-      const icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E";
-      
-      navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification(title, { 
-              body: body, 
-              icon: icon, 
-              tag: 'text-reader-app', 
-              renotify: true, 
-              vibrate: [100, 50, 100],
-              silent: false 
-          });
-      });
-    }
-
-    notifBtn.addEventListener('click', async () => {
-      if (!('serviceWorker' in navigator) || !('Notification' in window)) return showToast("Trình duyệt không hỗ trợ thông báo.");
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') return showToast('❌ Cần cấp quyền thông báo');
-
-      try {
-        await navigator.serviceWorker.register('sw.js'); 
-        pushEnabled = true;
-        notifBtn.innerHTML = "🔔 Đã bật (Sẵn sàng)"; 
-        notifBtn.classList.add('active');
-        showToast("✅ Đã bật thông báo!");
-        sendNotification("🔔 Sẵn sàng", "Thông báo sẽ hiện khi chuyển đoạn!");
-        saveProgress();
-      } catch (err) {
-        showToast("Lỗi đăng ký Service Worker. Hãy kiểm tra file sw.js!");
-      }
-    });
-
-    slider.addEventListener("input", () => {
-      if (paragraphMode && segments.length > 1) {
-        const paragraphIndex = parseInt(slider.value);
-        currentParagraphIndex = paragraphIndex;
-        showCurrentParagraph();
-      } else if (fullTextContent.length > 0 && !paragraphMode) {
-        displayArea.scrollTop = (slider.value / 100) * (displayArea.scrollHeight - displayArea.clientHeight);
-        saveProgress(); 
-      }
-    });
-
-    // Lắng nghe sự kiện input cho cài đặt giới hạn hiển thị (Chỉ dùng cho TXT)
-    maxCharsDisplayInput.addEventListener("input", function() {
-        saveProgress();
-        if (paragraphMode && fullTextContent && !isSrtFile) {
-            const rawParagraphs = fullTextContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
-            segments = preprocessParagraphs(rawParagraphs); 
-            currentParagraphIndex = 0;
-            showCurrentParagraph();
-        }
-    });
-
-    document.getElementById("clockSize").addEventListener("input", function() {
-      document.getElementById("clock").style.fontSize = this.value + "em";
-      saveProgress();
-    });
-
-    document.getElementById("areaHeight").addEventListener("input", function() {
-      displayArea.style.maxHeight = this.value + "vh";
-      saveProgress();
-    });
-
-    document.getElementById("speedRange").addEventListener("input", saveProgress);
-    document.getElementById("paragraphTime").addEventListener("input", saveProgress); 
-    document.getElementById("maxCharsPerNotif").addEventListener("input", saveProgress);
-
-    // Hàm xóa tiến trình
-    function clearProgress() {
-        localStorage.removeItem('textReaderProgress');
-        showToast('🧹 Đã xóa tiến trình đã lưu.');
-        location.reload(); 
-    }
-    window.clearProgress = clearProgress; // Cần thiết để hàm có thể được gọi từ HTML
-
-    function updateClock() {
-      const now = new Date();
-      let h = String(now.getHours()).padStart(2,"0");
-      let m = String(now.getMinutes()).padStart(2,"0");
-      document.getElementById("clock").textContent = `${h}:${m}`;
-      const options = { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' };
-      document.getElementById("date").textContent = now.toLocaleDateString("vi-VN", options);
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    bubble.addEventListener("mousedown", function(e) {
-      let shiftX = e.clientX - bubble.getBoundingClientRect().left;
-      let shiftY = e.clientY - bubble.getBoundingClientRect().top;
-      function moveAt(pageX, pageY) {
-        bubble.style.left = pageX - shiftX + 'px';
-        bubble.style.top = pageY - shiftY + 'px';
-      }
-      function onMouseMove(e) { moveAt(e.pageX, e.pageY); }
-      document.addEventListener('mousemove', onMouseMove);
-      bubble.onmouseup = function() {
-        document.removeEventListener('mousemove', onMouseMove);
-        bubble.onmouseup = null;
+    history.forEach(fileName => {
+      const btn = document.createElement('button');
+      btn.textContent = fileName.length > 30 ? fileName.slice(0,27)+'…' : fileName;
+      btn.classList.add('history-item');
+      if (currentFileName === fileName) btn.classList.add('active-file');
+      btn.title = `Mở lại "${fileName}" với tiến trình đã lưu`;
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        if (scrolling) restoreControls();
+        // Tải lại file từ bộ nhớ? Cần đọc lại file. Nhưng vì ta lưu content rồi nên khôi phục trực tiếp
+        restoreProgressForFile(fileName);
+        // Cập nhật input file để đồng bộ UI (không cần đọc lại file)
+        document.getElementById("fileInput").value = '';
       };
+      container.appendChild(btn);
     });
-    bubble.ondragstart = () => false;
-
-    document.addEventListener('keydown', function(e) {
-      // Chỉ cho phép điều hướng bằng phím mũi tên khi đang ở chế độ đoạn và không cuộn tự động
-      if (fullTextContent.length > 0 && paragraphMode && !scrolling) {
-          if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            nextParagraph();
-          } else if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            previousParagraph();
-          }
-      } else if (fullTextContent.length > 0 && e.key === ' ') {
-          e.preventDefault();
-          toggleScroll();
+  }
+  
+  function clearAllHistory() {
+    if (confirm("🗑️ Xóa toàn bộ lịch sử file và tất cả dữ liệu đã lưu? Hành động không thể hoàn tác.")) {
+      const history = getFileHistoryList();
+      history.forEach(fileName => {
+        localStorage.removeItem('textReader_' + fileName);
+      });
+      localStorage.removeItem('fileHistoryList');
+      showToast("Đã xóa toàn bộ lịch sử và dữ liệu file.");
+      location.reload();
+    }
+  }
+  
+  function clearCurrentFileProgress() {
+    if (!currentFileName) { showToast("Chưa có file nào đang mở"); return; }
+    if (confirm(`Xóa tiến trình lưu cho file "${currentFileName}"?`)) {
+      localStorage.removeItem('textReader_' + currentFileName);
+      // Xóa khỏi lịch sử
+      let history = getFileHistoryList();
+      history = history.filter(name => name !== currentFileName);
+      localStorage.setItem('fileHistoryList', JSON.stringify(history));
+      showToast(`Đã xóa tiến trình cho ${currentFileName}`);
+      renderHistoryList();
+      // Reset giao diện nhưng giữ nội dung
+      if (!isSrtFile) {
+        const rawParagraphs = currentFileContent.split(/[.!?]+/).filter(p => p.trim().length > 0);
+        segments = preprocessParagraphs(rawParagraphs);
+        currentParagraphIndex = 0;
+        showCurrentParagraph(false);
       }
-    });
-
-    window.addEventListener('beforeunload', saveProgress);
-  </script>
+    }
+  }
+  
+  // ========== HIỂN THỊ ĐOẠN ==========
+  function showCurrentParagraph(shouldSave = true) {
+    if (!segments.length || currentParagraphIndex >= segments.length) return;
+    const seg = segments[currentParagraphIndex];
+    if (isSrtFile) {
+      displayArea.innerHTML = `<div class="srt-segment">
+        <span class="srt-time">${seg.start || ''} --> ${seg.end || ''}</span>
+        <div class="srt-korean">${seg.korean || ''}</div>
+        <div class="srt-vietnamese">${seg.vietnamese || ''}</div>
+      </div>`;
+      if (pushEnabled) {
+        let notifBody = `${seg.korean || ''} | ${seg.vietnamese || ''}`;
+        notifBody = smartTruncate(notifBody, parseInt(maxCharsNotifInput.value) || 100, true);
+        sendNotification(`📌 ${currentFileName} | ${currentParagraphIndex+1}/${segments.length}`, notifBody);
+      }
+    } else {
+      displayArea.textContent = seg;
+      if (pushEnabled) {
+        let notifBody = smartTruncate(seg, parseInt(maxCharsNotifInput.value) || 100, true);
+        sendNotification(`📄 ${currentFileName} - Đoạn ${currentParagraphIndex+1}/${segments.length}`, notifBody);
+      }
+    }
+    updateParagraphInfo();
+    updateSliderForParagraphs();
+    if (shouldSave) saveProgressForCurrentFile();
+  }
+  
+  function nextParagraph() {
+    if (currentParagraphIndex < segments.length - 1) {
+      currentParagraphIndex++;
+      showCurrentParagraph();
+    } else {
+      showToast("✨ Đã đến đoạn cuối cùng");
+    }
+  }
+  
+  function previousParagraph() {
+    if (currentParagraphIndex > 0) {
+      currentParagraphIndex--;
+      showCurrentParagraph();
+    } else {
+      showToast("Đã ở đoạn đầu");
+    }
+  }
+  
+  function updateParagraphInfo() {
+    if (paragraphMode && segments.length) {
+      paragraphInfoDiv.style.display = 'block';
+      paragraphInfoDiv.textContent = `📖 Đoạn ${currentParagraphIndex+1} / ${segments.length}`;
+    } else {
+      paragraphInfoDiv.style.display = 'none';
+    }
+  }
+  
+  function updateSliderForParagraphs() {
+    if (paragraphMode && segments.length > 1) {
+      slider.min = 0;
+      slider.max = segments.length - 1;
+      slider.value = currentParagraphIndex;
+      slider.style.display = 'block';
+    } else if (!paragraphMode && currentFileContent) {
+      slider.min = 0;
+      slider.max = 100;
+      slider.style.display = 'block';
+    } else {
+      slider.style.display = 'none';
+    }
+  }
+  
+  function toggleMode() {
+    if (!currentFileContent) { showToast("Chọn file trước"); return; }
+    if (isSrtFile) { showToast("SRT chỉ hoạt động chế độ từng đoạn"); return; }
+    paragraphMode = !paragraphMode;
+    modeBtn.textContent = paragraphMode ? "📜 Chế độ cuộn liên tục" : "📖 Chế độ từng đoạn";
+    paragraphTimeLabel.style.display = paragraphMode ? "flex" : "none";
+    if (paragraphMode) {
+      const rawParagraphs = currentFileContent.split(/[.!?]+/).filter(p=>p.trim().length>0);
+      segments = preprocessParagraphs(rawParagraphs);
+      currentParagraphIndex = Math.min(currentParagraphIndex, segments.length-1);
+      if (segments.length) showCurrentParagraph();
+    } else {
+      displayArea.textContent = currentFileContent;
+      displayArea.scrollTop = 0;
+    }
+    updateParagraphInfo();
+    updateSliderForParagraphs();
+    saveProgressForCurrentFile();
+  }
+  
+  function toggleScroll() {
+    if (!currentFileContent.length) { showToast("Chọn file trước"); return; }
+    if (scrolling) { restoreControls(); return; }
+    scrolling = true;
+    const scrollBtn = document.querySelector("#controls button");
+    scrollBtn.textContent = '⏸️ Dừng';
+    controlsDiv.style.display = "none";
+    bubble.style.display = "block";
+    document.querySelector("h2").style.display = "none";
+    document.getElementById("fileInput").style.display = "none";
+    paragraphInfoDiv.style.display = "none";
+    
+    if (paragraphMode) {
+      const delaySec = parseFloat(paragraphTimeInput.value) * 1000;
+      interval = setInterval(() => {
+        if (currentParagraphIndex >= segments.length - 1) {
+          restoreControls();
+          showToast("🏁 Kết thúc nội dung");
+          return;
+        }
+        nextParagraph();
+      }, delaySec);
+    } else {
+      interval = setInterval(() => {
+        if (displayArea.scrollTop + displayArea.clientHeight >= displayArea.scrollHeight - 2) {
+          restoreControls();
+          showToast("Cuộn hoàn tất");
+          return;
+        }
+        displayArea.scrollTop += parseInt(speedRange.value);
+        let percent = (displayArea.scrollTop / (displayArea.scrollHeight - displayArea.clientHeight)) * 100;
+        slider.value = percent || 0;
+        saveProgressForCurrentFile();
+      }, 100);
+    }
+  }
+  
+  function restoreControls() {
+    clearInterval(interval);
+    scrolling = false;
+    controlsDiv.style.display = "flex";
+    bubble.style.display = "none";
+    document.querySelector("h2").style.display = "block";
+    document.getElementById("fileInput").style.display = "block";
+    const btn = document.querySelector("#controls button");
+    if (btn) btn.textContent = '▶️ Bắt đầu / ⏸️ Dừng';
+    if (paragraphMode && segments.length) updateParagraphInfo();
+    saveProgressForCurrentFile();
+  }
+  
+  async function sendNotification(title, body) {
+    if (!pushEnabled) return;
+    if (!('serviceWorker' in navigator) || !('Notification' in window)) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(title, { body, icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📄%3C/text%3E%3C/svg%3E", tag: 'reader-app', renotify: true });
+    } catch(e) {}
+  }
+  
+  notifBtn.addEventListener('click', async () => {
+    if (!('Notification' in window)) return showToast("Trình duyệt không hỗ trợ");
+    let perm = await Notification.requestPermission();
+    if (perm !== 'granted') return showToast("Cần cấp quyền");
+    try {
+      await navigator.serviceWorker.register('sw.js');
+      pushEnabled = true;
+      notifBtn.innerHTML = "🔔 Đã bật";
+      notifBtn.classList.add('active');
+      showToast("✅ Thông báo sẵn sàng");
+      sendNotification("🔔 Trình đọc", "Thông báo sẽ hiện khi sang đoạn mới");
+      saveProgressForCurrentFile();
+    } catch(e) { showToast("Thông báo hoạt động nhưng không có sw.js"); pushEnabled = true; }
+  });
+  
+  // ========== XỬ LÝ KHI CHỌN FILE ==========
+  document.getElementById("fileInput").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (scrolling) restoreControls();
+    
+    const fileName = file.name;
+    
+    // THỬ KHÔI PHỤC TỪ LOCALSTORAGE THEO TÊN FILE TRƯỚC
+    const storageKey = 'textReader_' + fileName;
+    const existingData = localStorage.getItem(storageKey);
+    
+    if (existingData) {
+      // Có dữ liệu cũ -> khôi phục luôn, không cần đọc lại file content (vì đã lưu content)
+      restoreProgressForFile(fileName);
+      document.getElementById("fileInput").value = '';
+      showToast(`📂 Đã khôi phục "${fileName}" từ bộ nhớ`);
+    } else {
+      // File mới -> đọc và lưu lần đầu
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        currentFileContent = ev.target.result;
+        currentFileName = fileName;
+        isSrtFile = fileName.toLowerCase().endsWith('.srt');
+        paragraphMode = true;
+        
+        if (isSrtFile) {
+          segments = parseSrt(currentFileContent);
+          displayArea.classList.add('srt-mode');
+          maxCharsDisplayGroup.style.display = 'none';
+          speedGroup.style.display = 'none';
+          modeBtn.textContent = "📜 Chế độ cuộn liên tục";
+          paragraphTimeLabel.style.display = "flex";
+        } else {
+          displayArea.classList.remove('srt-mode');
+          maxCharsDisplayGroup.style.display = 'flex';
+          speedGroup.style.display = 'flex';
+          const rawParas = currentFileContent.split(/[.!?]+/).filter(p=>p.trim().length>0);
+          segments = preprocessParagraphs(rawParas);
+          modeBtn.textContent = "📜 Chế độ cuộn liên tục";
+          paragraphTimeLabel.style.display = "flex";
+        }
+        currentParagraphIndex = 0;
+        showCurrentParagraph(false);
+        updateSliderForParagraphs();
+        saveProgressForCurrentFile();
+        renderHistoryList();
+        showToast(`📂 Đã tải mới: ${fileName}`);
+      };
+      reader.readAsText(file);
+    }
+  });
+  
+  // Sự kiện cho slider
+  slider.addEventListener("input", () => {
+    if (paragraphMode && segments.length) {
+      let idx = parseInt(slider.value);
+      if (!isNaN(idx) && idx !== currentParagraphIndex && idx >=0 && idx < segments.length) {
+        currentParagraphIndex = idx;
+        showCurrentParagraph();
+      }
+    } else if (!paragraphMode && currentFileContent) {
+      let percent = parseFloat(slider.value);
+      displayArea.scrollTop = (percent/100) * (displayArea.scrollHeight - displayArea.clientHeight);
+      saveProgressForCurrentFile();
+    }
+  });
+  
+  // Lưu khi thay đổi cài đặt
+  const saveSettings = () => saveProgressForCurrentFile();
+  clockSizeRange.addEventListener("input", function() { document.getElementById("clock").style.fontSize = this.value+"em"; saveSettings(); });
+  areaHeightRange.addEventListener("input", function() { displayArea.style.maxHeight = this.value+"vh"; saveSettings(); });
+  speedRange.addEventListener("input", saveSettings);
+  paragraphTimeInput.addEventListener("input", saveSettings);
+  maxCharsDisplayInput.addEventListener("input", function() { 
+    if (!isSrtFile && paragraphMode && currentFileContent) { 
+      const raw = currentFileContent.split(/[.!?]+/).filter(p=>p.trim()); 
+      segments = preprocessParagraphs(raw); 
+      currentParagraphIndex = Math.min(currentParagraphIndex, segments.length-1); 
+      showCurrentParagraph(); 
+    } 
+    saveSettings(); 
+  });
+  maxCharsNotifInput.addEventListener("input", saveSettings);
+  
+  document.getElementById("clearAllHistoryBtn").addEventListener("click", clearAllHistory);
+  
+  window.clearCurrentFileProgress = clearCurrentFileProgress;
+  window.toggleScroll = toggleScroll;
+  window.toggleMode = toggleMode;
+  window.restoreControls = restoreControls;
+  window.nextParagraph = nextParagraph;
+  window.previousParagraph = previousParagraph;
+  
+  function updateClock() { 
+    const now = new Date(); 
+    document.getElementById("clock").textContent = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`; 
+    document.getElementById("date").textContent = now.toLocaleDateString("vi-VN", { weekday: 'short', day:'2-digit', month:'long', year:'numeric' }); 
+  }
+  setInterval(updateClock,1000); 
+  updateClock();
+  renderHistoryList();
+  
+  bubble.ondragstart = () => false;
+  bubble.addEventListener("mousedown", (e) => {
+    let shiftX = e.clientX - bubble.getBoundingClientRect().left;
+    let shiftY = e.clientY - bubble.getBoundingClientRect().top;
+    function moveAt(pageX,pageY) { bubble.style.left = pageX - shiftX + 'px'; bubble.style.top = pageY - shiftY + 'px'; }
+    function onMouseMove(e) { moveAt(e.pageX, e.pageY); }
+    document.addEventListener('mousemove', onMouseMove);
+    bubble.onmouseup = () => { document.removeEventListener('mousemove', onMouseMove); bubble.onmouseup = null; };
+  });
+  
+  document.addEventListener('keydown', (e) => {
+    if (currentFileContent && paragraphMode && !scrolling) {
+      if (e.key === 'ArrowRight') { e.preventDefault(); nextParagraph(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); previousParagraph(); }
+    } else if (currentFileContent && e.key === ' ') { e.preventDefault(); toggleScroll(); }
+  });
+  
+  window.addEventListener('beforeunload', () => { if (currentFileName) saveProgressForCurrentFile(); });
+</script>
 </body>
 </html>
