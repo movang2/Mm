@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>Trình đọc SRT/TXT - Lưu metadata (không lưu nội dung)</title>
+  <title>Trình đọc SRT/TXT - Ẩn lịch sử khi đọc</title>
   <style>
     * {
       box-sizing: border-box;
@@ -223,6 +223,12 @@
       gap: 10px;
       justify-content: center;
       border: 1px solid #2c2c44;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+    .file-history.hidden {
+      opacity: 0;
+      visibility: hidden;
+      display: none;
     }
     .history-label {
       font-size: 0.85rem;
@@ -336,6 +342,7 @@
   const speedRange = document.getElementById("speedRange");
   const paragraphTimeInput = document.getElementById("paragraphTime");
   const maxCharsNotifInput = document.getElementById("maxCharsPerNotif");
+  const fileHistoryPanel = document.getElementById("fileHistoryPanel");
   
   function showToast(msg) { 
     toastEl.textContent = msg; 
@@ -422,20 +429,15 @@
       maxCharsPerDisplay: maxCharsDisplayInput.value,
       maxCharsPerNotif: maxCharsNotifInput.value,
       pushEnabled: pushEnabled,
-      // LƯU Ý: KHÔNG LƯU currentFileContent (nội dung file)
       totalSegments: segments.length,
       timestamp: Date.now()
     };
     
-    // Key riêng cho từng file: "readerMeta_" + tên file
     const storageKey = 'readerMeta_' + currentFileName;
     localStorage.setItem(storageKey, JSON.stringify(metadata));
-    
-    // Cập nhật danh sách lịch sử
     updateFileHistory(currentFileName);
   }
   
-  // ========== ĐỌC METADATA THEO TÊN FILE ==========
   function getMetadataForFile(fileName) {
     const storageKey = 'readerMeta_' + fileName;
     const saved = localStorage.getItem(storageKey);
@@ -447,11 +449,9 @@
     }
   }
   
-  // ========== ÁP DỤNG METADATA VÀO FILE VỪA ĐỌC ==========
   function applyMetadataToCurrentFile(metadata) {
     if (!metadata) return false;
     
-    // Khôi phục cài đặt
     paragraphMode = (metadata.paragraphMode !== undefined) ? metadata.paragraphMode : true;
     currentParagraphIndex = metadata.currentParagraphIndex || 0;
     pushEnabled = metadata.pushEnabled || false;
@@ -474,7 +474,6 @@
       notifBtn.classList.remove('active');
     }
     
-    // Tái tạo segments dựa trên nội dung file hiện tại và maxChars mới
     if (isSrtFile) {
       segments = parseSrt(currentFileContent);
     } else {
@@ -482,11 +481,9 @@
       segments = preprocessParagraphs(rawParagraphs);
     }
     
-    // Đảm bảo index hợp lệ
     if (currentParagraphIndex >= segments.length) currentParagraphIndex = segments.length - 1;
     if (currentParagraphIndex < 0) currentParagraphIndex = 0;
     
-    // Hiển thị nội dung
     if (paragraphMode) {
       showCurrentParagraph(false);
     } else {
@@ -501,12 +498,11 @@
     
     updateParagraphInfo();
     updateSliderForParagraphs();
-    
     showToast(`📂 Đã khôi phục cài đặt cho "${currentFileName}" | Đoạn ${currentParagraphIndex+1}/${segments.length}`);
     return true;
   }
   
-  // ========== QUẢN LÝ LỊCH SỬ FILE ĐÃ MỞ ==========
+  // ========== QUẢN LÝ LỊCH SỬ FILE ==========
   function getFileHistoryList() {
     const history = localStorage.getItem('fileHistoryList');
     return history ? JSON.parse(history) : [];
@@ -542,9 +538,7 @@
       btn.onclick = (e) => {
         e.stopPropagation();
         showToast(`📁 Vui lòng chọn lại file "${fileName}" từ máy tính để tiếp tục đọc`);
-        // Tự động kích hoạt input file và gợi ý
         document.getElementById("fileInput").click();
-        // Lưu tên file đang muốn mở để sau khi chọn xong tự khôi phục
         sessionStorage.setItem('pendingFileName', fileName);
       };
       container.appendChild(btn);
@@ -552,7 +546,7 @@
   }
   
   function clearAllHistory() {
-    if (confirm("🗑️ Xóa toàn bộ lịch sử file và metadata đã lưu? Hành động không thể hoàn tác.")) {
+    if (confirm("🗑️ Xóa toàn bộ lịch sử file và metadata đã lưu?")) {
       const history = getFileHistoryList();
       history.forEach(fileName => {
         localStorage.removeItem('readerMeta_' + fileName);
@@ -565,13 +559,12 @@
   
   function clearCurrentFileProgress() {
     if (!currentFileName) { showToast("Chưa có file nào đang mở"); return; }
-    if (confirm(`Xóa metadata cho file "${currentFileName}"? Cài đặt sẽ reset về mặc định.`)) {
+    if (confirm(`Xóa metadata cho file "${currentFileName}"?`)) {
       localStorage.removeItem('readerMeta_' + currentFileName);
       let history = getFileHistoryList();
       history = history.filter(name => name !== currentFileName);
       localStorage.setItem('fileHistoryList', JSON.stringify(history));
       
-      // Reset cài đặt hiện tại về mặc định
       clockSizeRange.value = 4;
       areaHeightRange.value = 60;
       speedRange.value = 3;
@@ -591,7 +584,7 @@
       
       renderHistoryList();
       showToast(`Đã xóa metadata cho ${currentFileName}`);
-      saveMetadataForCurrentFile(); // lưu lại metadata mới (reset)
+      saveMetadataForCurrentFile();
     }
   }
   
@@ -684,6 +677,19 @@
     saveMetadataForCurrentFile();
   }
   
+  // ========== ẨN/HIỆN LỊCH SỬ KHI BẮT ĐẦU/DỪNG ==========
+  function hideHistoryPanel() {
+    if (fileHistoryPanel) {
+      fileHistoryPanel.classList.add('hidden');
+    }
+  }
+  
+  function showHistoryPanel() {
+    if (fileHistoryPanel) {
+      fileHistoryPanel.classList.remove('hidden');
+    }
+  }
+  
   function toggleScroll() {
     if (!currentFileContent.length) { showToast("Chọn file trước"); return; }
     if (scrolling) { restoreControls(); return; }
@@ -695,6 +701,9 @@
     document.querySelector("h2").style.display = "none";
     document.getElementById("fileInput").style.display = "none";
     paragraphInfoDiv.style.display = "none";
+    
+    // ẨN LỊCH SỬ FILE KHI BẮT ĐẦU ĐỌC
+    hideHistoryPanel();
     
     if (paragraphMode) {
       const delaySec = parseFloat(paragraphTimeInput.value) * 1000;
@@ -731,6 +740,10 @@
     const btn = document.querySelector("#controls button");
     if (btn) btn.textContent = '▶️ Bắt đầu / ⏸️ Dừng';
     if (paragraphMode && segments.length) updateParagraphInfo();
+    
+    // HIỆN LẠI LỊCH SỬ FILE KHI DỪNG
+    showHistoryPanel();
+    
     saveMetadataForCurrentFile();
   }
   
@@ -755,10 +768,10 @@
       showToast("✅ Thông báo sẵn sàng");
       sendNotification("🔔 Trình đọc", "Thông báo sẽ hiện khi sang đoạn mới");
       saveMetadataForCurrentFile();
-    } catch(e) { showToast("Thông báo hoạt động (sw.js không bắt buộc)"); pushEnabled = true; }
+    } catch(e) { showToast("Thông báo hoạt động"); pushEnabled = true; }
   });
   
-  // ========== XỬ LÝ KHI CHỌN FILE ==========
+  // XỬ LÝ KHI CHỌN FILE
   document.getElementById("fileInput").addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -773,7 +786,6 @@
       currentFileName = fileName;
       isSrtFile = fileName.toLowerCase().endsWith('.srt');
       
-      // Cấu hình UI theo loại file
       maxCharsDisplayGroup.style.display = isSrtFile ? 'none' : 'flex';
       speedGroup.style.display = isSrtFile ? 'none' : 'flex';
       
@@ -787,14 +799,11 @@
         paragraphTimeLabel.style.display = "flex";
       }
       
-      // KIỂM TRA XEM CÓ METADATA CHO FILE NÀY KHÔNG
       const metadata = getMetadataForFile(fileName);
       
       if (metadata) {
-        // CÓ METADATA -> khôi phục cài đặt và vị trí
         applyMetadataToCurrentFile(metadata);
       } else {
-        // FILE MỚI -> tạo segments mới
         if (isSrtFile) {
           segments = parseSrt(currentFileContent);
         } else {
@@ -811,13 +820,11 @@
       saveMetadataForCurrentFile();
       renderHistoryList();
       
-      // Xóa pending nếu có
       if (pendingFile === fileName) sessionStorage.removeItem('pendingFileName');
     };
     reader.readAsText(file);
   });
   
-  // Sự kiện cho slider
   slider.addEventListener("input", () => {
     if (paragraphMode && segments.length) {
       let idx = parseInt(slider.value);
@@ -832,7 +839,6 @@
     }
   });
   
-  // Lưu khi thay đổi cài đặt
   const saveSettings = () => saveMetadataForCurrentFile();
   clockSizeRange.addEventListener("input", function() { document.getElementById("clock").style.fontSize = this.value+"em"; saveSettings(); });
   areaHeightRange.addEventListener("input", function() { displayArea.style.maxHeight = this.value+"vh"; saveSettings(); });
